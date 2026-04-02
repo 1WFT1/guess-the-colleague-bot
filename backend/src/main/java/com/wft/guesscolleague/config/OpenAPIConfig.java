@@ -10,9 +10,24 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 
+/**
+ * Конфигурация OpenAPI (Swagger) для документации API
+ * После запуска документация доступна по адресу: http://localhost:8080/swagger-ui.html
+ */
 @Configuration
 public class OpenAPIConfig {
 
+    /**
+     * Настройка OpenAPI документации
+     *
+     * @return конфигурация OpenAPI
+     *
+     * Содержит:
+     * - Название и описание API
+     * - Контактную информацию
+     * - Лицензию
+     * - URL сервера для тестирования
+     */
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
