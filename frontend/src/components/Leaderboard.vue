@@ -155,11 +155,22 @@ const getUserName = () => {
 };
 
 const getInitials = (name: string) => {
+  if (!name || name.length === 0) {
+    return 'U'; // Возвращаем 'User' по умолчанию
+  }
+  
   const parts = name.split(' ');
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+    const first = parts[0]?.[0] || '';
+    const second = parts[1]?.[0] || '';
+    if (first && second) {
+      return (first + second).toUpperCase();
+    }
   }
-  return name[0]?.toUpperCase() || 'U';
+  
+  // Если имя состоит из одного слова
+  const firstChar = name[0];
+  return firstChar ? firstChar.toUpperCase() : 'U';
 };
 
 const leaderboard = computed(() => {

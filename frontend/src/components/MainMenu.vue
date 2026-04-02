@@ -84,12 +84,31 @@ const emit = defineEmits<{
 }>();
 
 const userInitials = computed(() => {
-  if (!props.userName) return '👤';
-  const names = props.userName.split(' ');
-  if (names.length >= 2) {
-    return (names[0][0] + names[1][0]).toUpperCase();
+  if (!props.userName || props.userName.length === 0) {
+    return '👤';
   }
-  return props.userName[0].toUpperCase();
+  
+  const names = props.userName.trim().split(' ');
+  
+  // Проверяем, что есть хотя бы одно имя
+  if (names.length >= 1 && names[0]) {
+    const firstInitial = names[0][0];
+    
+    // Если есть фамилия
+    if (names.length >= 2 && names[1]) {
+      const secondInitial = names[1][0];
+      if (firstInitial && secondInitial) {
+        return (firstInitial + secondInitial).toUpperCase();
+      }
+    }
+    
+    // Если только имя
+    if (firstInitial) {
+      return firstInitial.toUpperCase();
+    }
+  }
+  
+  return '👤';
 });
 
 const mascotMessage = computed(() => {

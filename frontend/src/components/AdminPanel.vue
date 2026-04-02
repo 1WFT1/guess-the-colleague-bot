@@ -11,14 +11,20 @@
         <div class="section-header">
           <h3>Управление сотрудниками</h3>
           <div class="actions">
-            <button @click="uploadCSV" class="btn btn-secondary">📁 Загрузить CSV</button>
-            <button @click="addEmployee" class="btn btn-primary">➕ Добавить сотрудника</button>
-            <button @click="exportData" class="btn btn-secondary">📤 Экспорт</button>
+            <button @click="uploadCSV" class="btn btn-secondary">
+              📁 Загрузить CSV
+            </button>
+            <button @click="openAddModal" class="btn btn-primary">
+              ➕ Добавить сотрудника
+            </button>
+            <button @click="exportData" class="btn btn-secondary">
+              📤 Экспорт
+            </button>
           </div>
         </div>
         
-        <div class="employees-table">
-          <table>
+        <div class="table-wrapper">
+          <table class="employees-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -30,20 +36,31 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="employee in employees" :key="employee.id">
-                <td>{{ employee.id }}</td>
-                <td>{{ employee.fullName }}</td>
-                <td>{{ employee.department }}</td>
-                <td>
-                  <span v-if="employee.photoUrl">☑️</span>
-                  <span v-else>❌</span>
+              <tr v-for="employee in paginatedEmployees" :key="employee.id">
+                <td class="id-cell">{{ employee.id }}</td>
+                <td class="name-cell">{{ employee.fullName }}</td>
+                <td class="dept-cell">{{ employee.department }}</td>
+                <td class="photo-cell">
+                  <span v-if="employee.photoUrl" class="status-icon success">☑️</span>
+                  <span v-else class="status-icon error">❌</span>
                 </td>
-                <td>
-                  <input type="checkbox" :checked="employee.isActive" @change="toggleActive(employee.id)" />
+                <td class="active-cell">
+                  <label class="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      :checked="employee.isActive" 
+                      @change="toggleActive(employee.id)"
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
                 </td>
-                <td>
-                  <button @click="editEmployee(employee)" class="edit-btn">✏️</button>
-                  <button @click="deleteEmployee(employee.id)" class="delete-btn">🗑️</button>
+                <td class="actions-cell">
+                  <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
+                    ✏️
+                  </button>
+                  <button @click="deleteEmployee(employee.id)" class="delete-btn" title="Удалить">
+                    🗑️
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -51,9 +68,23 @@
         </div>
         
         <div class="pagination">
-          <button @click="prevPage" :disabled="currentPage === 1" class="page-btn">‹</button>
-          <span class="page-info">Страница {{ currentPage }} из {{ totalPages }}</span>
-          <button @click="nextPage" :disabled="currentPage === totalPages" class="page-btn">›</button>
+          <button 
+            @click="prevPage" 
+            :disabled="currentPage === 1" 
+            class="page-btn"
+          >
+            ‹
+          </button>
+          <span class="page-info">
+            Страница {{ currentPage }} из {{ totalPages }}
+          </span>
+          <button 
+            @click="nextPage" 
+            :disabled="currentPage === totalPages" 
+            class="page-btn"
+          >
+            ›
+          </button>
         </div>
       </div>
       
@@ -80,63 +111,274 @@
             <div class="stat-label">Средний балл</div>
           </div>
         </div>
-        <button @click="showDetailedStats" class="btn btn-primary full-width">☑️ Детальная статистика</button>
+      </div>
+    </div>
+
+    <!-- Модальное окно добавления/редактирования сотрудника -->
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>{{ isEditing ? 'Редактирование сотрудника' : 'Добавление сотрудника' }}</h3>
+          <button @click="closeModal" class="modal-close">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="form-group">
+            <label>ФИО *</label>
+            <input 
+              v-model="formData.fullName" 
+              type="text" 
+              placeholder="Введите ФИО сотрудника"
+              class="form-input"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>Отдел</label>
+            <select v-model="formData.department" class="form-select">
+              <option value="">Выберите отдел</option>
+              <option value="Разработка">Разработка</option>
+              <option value="Маркетинг">Маркетинг</option>
+              <option value="HR">HR</option>
+              <option value="Аналитика">Аналитика</option>
+              <option value="Дизайн">Дизайн</option>
+              <option value="Продажи">Продажи</option>
+              <option value="Поддержка">Поддержка</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>Фото (URL)</label>
+            <input 
+              v-model="formData.photoUrl" 
+              type="text" 
+              placeholder="https://example.com/photo.jpg"
+              class="form-input"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="formData.isActive" />
+              <span>Активен</span>
+            </label>
+          </div>
+          
+          <div v-if="formData.photoUrl" class="photo-preview">
+            <p>Предпросмотр:</p>
+            <img :src="formData.photoUrl" alt="Фото сотрудника" @error="handleImageError" />
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button @click="closeModal" class="btn-cancel">Отмена</button>
+          <button @click="saveEmployee" class="btn-save">
+            {{ isEditing ? 'Сохранить' : 'Добавить' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:8080/api';
 
 const emit = defineEmits<{
   close: [];
 }>();
 
-const employees = ref([
-  { id: 1, fullName: 'Анна Иванова', department: 'Разработка', photoUrl: 'https://...', isActive: true },
-  { id: 2, fullName: 'Петр Сидоров', department: 'Маркетинг', photoUrl: 'https://...', isActive: true },
-  { id: 3, fullName: 'Елена Козлова', department: 'HR', photoUrl: 'https://...', isActive: true },
-  { id: 4, fullName: 'Игорь Ветров', department: 'Аналитика', photoUrl: 'https://...', isActive: true },
-  { id: 5, fullName: 'Светлана Морозова', department: 'Дизайн', photoUrl: 'https://...', isActive: true },
-]);
+// Интерфейс сотрудника
+interface Employee {
+  id: number;
+  fullName: string;
+  department: string;
+  photoUrl: string;
+  isActive: boolean;
+}
 
+// Интерфейс формы
+interface EmployeeForm {
+  fullName: string;
+  department: string;
+  photoUrl: string;
+  isActive: boolean;
+}
+
+// Начальные данные сотрудников
+const employees = ref<Employee[]>([]);
+const loading = ref(false);
+
+// Реактивные данные
 const currentPage = ref(1);
-const totalPages = ref(26);
+const itemsPerPage = 5;
 
+// Статистика игры
 const gameStats = ref({
-  totalPlayers: 127,
-  activeToday: 45,
+  totalPlayers: employees.value.length,
+  activeToday: employees.value.filter(e => e.isActive).length,
   totalQuestions: 3452,
   averageScore: 234
 });
 
-const uploadCSV = () => {
-  alert('Загрузка CSV файла');
-};
+// Модальное окно
+const showModal = ref(false);
+const isEditing = ref(false);
+const editingId = ref<number | null>(null);
 
-const addEmployee = () => {
-  alert('Добавление нового сотрудника');
-};
+// Форма
+const formData = ref<EmployeeForm>({
+  fullName: '',
+  department: '',
+  photoUrl: '',
+  isActive: true
+});
 
-const exportData = () => {
-  alert('Экспорт данных');
-};
+// Пагинация
+const paginatedEmployees = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return employees.value.slice(start, end);
+});
 
-const editEmployee = (employee: any) => {
-  alert(`Редактирование сотрудника: ${employee.fullName}`);
-};
+onMounted(() => {
+  loadEmployees();
+});
 
-const deleteEmployee = (id: number) => {
-  if (confirm('Вы уверены, что хотите удалить этого сотрудника?')) {
-    alert('Сотрудник удален');
+const loadEmployees = async () => {
+  loading.value = true;
+  try {
+    const response = await axios.get(`${API_URL}/employees`);
+    employees.value = response.data;
+    updateStats();
+  } catch (error) {
+    console.error('Ошибка загрузки сотрудников:', error);
+    alert('Не удалось загрузить список сотрудников');
+  } finally {
+    loading.value = false;
   }
 };
 
-const toggleActive = (id: number) => {
-  alert(`Изменение статуса сотрудника ${id}`);
+const totalPages = computed(() => {
+  return Math.ceil(employees.value.length / itemsPerPage);
+});
+
+// Обновление статистики
+const updateStats = () => {
+  gameStats.value.totalPlayers = employees.value.length;
+  gameStats.value.activeToday = employees.value.filter(e => e.isActive).length;
 };
 
+// Открыть модалку добавления
+const openAddModal = () => {
+  isEditing.value = false;
+  editingId.value = null;
+  formData.value = {
+    fullName: '',
+    department: '',
+    photoUrl: '',
+    isActive: true
+  };
+  showModal.value = true;
+};
+
+// Открыть модалку редактирования
+const editEmployee = (employee: Employee) => {
+  isEditing.value = true;
+  editingId.value = employee.id;
+  formData.value = {
+    fullName: employee.fullName,
+    department: employee.department,
+    photoUrl: employee.photoUrl,
+    isActive: employee.isActive
+  };
+  showModal.value = true;
+};
+
+// Закрыть модалку
+const closeModal = () => {
+  showModal.value = false;
+  isEditing.value = false;
+  editingId.value = null;
+};
+
+// Сохранить сотрудника
+const saveEmployee = async () => {
+  if (!formData.value.fullName.trim()) {
+    alert('Введите ФИО сотрудника');
+    return;
+  }
+  
+  try {
+    if (isEditing.value && editingId.value !== null) {
+      // Редактирование
+      await axios.put(`${API_URL}/employees/${editingId.value}`, {
+        fullName: formData.value.fullName,
+        department: formData.value.department,
+        photoUrl: formData.value.photoUrl,
+        isActive: formData.value.isActive
+      });
+      alert('Сотрудник обновлен');
+    } else {
+      // Добавление
+      await axios.post(`${API_URL}/employees`, {
+        fullName: formData.value.fullName,
+        department: formData.value.department,
+        photoUrl: formData.value.photoUrl,
+        isActive: formData.value.isActive
+      });
+      alert('Сотрудник добавлен');
+    }
+    await loadEmployees(); // Перезагружаем список
+    closeModal();
+  } catch (error) {
+    console.error('Ошибка сохранения:', error);
+    alert('Ошибка при сохранении');
+  }
+};
+
+// Удалить сотрудника
+const deleteEmployee = async (id: number) => {
+  if (confirm('Вы уверены, что хотите удалить этого сотрудника?')) {
+    try {
+      await axios.delete(`${API_URL}/employees/${id}`);
+      await loadEmployees();
+      alert('Сотрудник удален');
+    } catch (error) {
+      console.error('Ошибка удаления:', error);
+      alert('Ошибка при удалении');
+    }
+  }
+};
+
+// Переключить статус активности
+const toggleActive = async (id: number) => {
+  const employee = employees.value.find(e => e.id === id);
+  if (employee) {
+    try {
+      await axios.patch(`${API_URL}/employees/${id}/active`, {
+        isActive: !employee.isActive
+      });
+      await loadEmployees();
+    } catch (error) {
+      console.error('Ошибка изменения статуса:', error);
+      alert('Ошибка при изменении статуса');
+    }
+  }
+};
+
+
+
+// Обработка ошибки загрузки фото
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.src = 'https://via.placeholder.com/100x100/2a2a2a/4f4ff4?text=No+Photo';
+};
+
+// Пагинация
 const prevPage = () => {
   if (currentPage.value > 1) currentPage.value--;
 };
@@ -145,24 +387,39 @@ const nextPage = () => {
   if (currentPage.value < totalPages.value) currentPage.value++;
 };
 
-const showDetailedStats = () => {
-  alert('Детальная статистика');
+// Загрузка CSV
+const uploadCSV = () => {
+  alert('Загрузка CSV файла');
+};
+
+// Экспорт данных
+const exportData = () => {
+  const data = JSON.stringify(employees.value, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `employees_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  alert('Данные экспортированы');
 };
 </script>
 
 <style scoped>
 .admin-panel {
-  background: white;
-  border-radius: 20px;
+  background: #1a1a1a;
+  border-radius: 30px;
   max-width: 1200px;
   margin: 0 auto;
   overflow: hidden;
   animation: slideIn 0.3s ease;
+  border: 1px solid #2a2a2a;
 }
 
 @keyframes slideIn {
   from {
-    transform: translateY(-50px);
+    transform: translateY(50px);
     opacity: 0;
   }
   to {
@@ -175,8 +432,8 @@ const showDetailedStats = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px 30px;
+  background: linear-gradient(135deg, #4f4ff4 0%, #6c6cff 100%);
   color: white;
 }
 
@@ -199,11 +456,11 @@ const showDetailedStats = () => {
 }
 
 .admin-content {
-  padding: 20px;
+  padding: 25px 30px;
 }
 
 .section {
-  margin-bottom: 30px;
+  margin-bottom: 35px;
 }
 
 .section-header {
@@ -212,154 +469,477 @@ const showDetailedStats = () => {
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 15px;
 }
 
 .section-header h3 {
   margin: 0;
-  color: #333;
+  color: white;
+  font-size: 18px;
 }
 
 .actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .btn {
-  padding: 10px 20px;
+  padding: 8px 18px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.3s;
 }
 
-.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+.btn-primary {
+  background: #4f4ff4;
+  color: white;
 }
 
-.btn-primary {
-  background: #667eea;
-  color: white;
+.btn-primary:hover {
+  background: #6c6cff;
+  transform: translateY(-2px);
 }
 
 .btn-secondary {
-  background: #f0f0f0;
-  color: #333;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border: 1px solid #3a3a3a;
 }
 
-.full-width {
-  width: 100%;
+.btn-secondary:hover {
+  background: #3a3a3a;
+  transform: translateY(-2px);
+  border-color: #4f4ff4;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  border: 1px solid #2a2a2a;
 }
 
 .employees-table {
-  overflow-x: auto;
-  margin-bottom: 20px;
-}
-
-table {
   width: 100%;
   border-collapse: collapse;
+  background: #1a1a1a;
 }
 
-th, td {
-  padding: 12px;
+.employees-table th,
+.employees-table td {
+  padding: 14px 16px;
   text-align: left;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid #2a2a2a;
 }
 
-th {
-  background: #f8f9fa;
-  font-weight: bold;
-  color: #333;
+.employees-table th {
+  background: #252525;
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.employees-table td {
+  color: #c0c0c0;
+  font-size: 14px;
+}
+
+.employees-table tr:hover td {
+  background: #252525;
+}
+
+.id-cell {
+  font-weight: 500;
+  color: #4f4ff4;
+}
+
+.name-cell {
+  font-weight: 500;
+}
+
+.photo-cell {
+  text-align: center;
+}
+
+.active-cell {
+  text-align: center;
+}
+
+.status-icon {
+  font-size: 16px;
+}
+
+.status-icon.success {
+  color: #4caf50;
+}
+
+.status-icon.error {
+  color: #f44336;
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 22px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #3a3a3a;
+  transition: 0.3s;
+  border-radius: 22px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #4f4ff4;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(22px);
+}
+
+.actions-cell {
+  display: flex;
+  gap: 10px;
 }
 
 .edit-btn, .delete-btn {
-  padding: 5px 10px;
-  margin: 0 5px;
+  background: none;
   border: none;
-  border-radius: 5px;
+  font-size: 18px;
   cursor: pointer;
-  font-size: 12px;
-  transition: transform 0.3s;
-}
-
-.edit-btn:hover, .delete-btn:hover {
-  transform: scale(1.05);
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 
 .edit-btn {
-  background: #4caf50;
-  color: white;
+  color: #4caf50;
+}
+
+.edit-btn:hover {
+  background: rgba(76, 175, 80, 0.2);
+  transform: scale(1.1);
 }
 
 .delete-btn {
-  background: #f44336;
-  color: white;
+  color: #f44336;
+}
+
+.delete-btn:hover {
+  background: rgba(244, 67, 54, 0.2);
+  transform: scale(1.1);
 }
 
 .pagination {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 15px;
+  gap: 20px;
   margin-top: 20px;
 }
 
 .page-btn {
-  padding: 5px 12px;
-  background: #f0f0f0;
-  border: none;
-  border-radius: 5px;
+  padding: 8px 16px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s;
+  font-size: 16px;
+  color: #e0e0e0;
+  transition: all 0.2s;
 }
 
 .page-btn:hover:not(:disabled) {
-  background: #667eea;
+  background: #4f4ff4;
+  border-color: #4f4ff4;
   color: white;
 }
 
 .page-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .page-info {
-  color: #666;
+  color: #888;
   font-size: 14px;
 }
 
+/* Статистика */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
 }
 
 .stat-card {
-  background: #f8f9fa;
+  background: #2a2a2a;
   padding: 20px;
-  border-radius: 10px;
+  border-radius: 16px;
   text-align: center;
-  transition: transform 0.3s;
+  transition: all 0.3s;
+  border: 1px solid #3a3a3a;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  transform: translateY(-3px);
+  border-color: #4f4ff4;
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: bold;
-  color: #667eea;
+  color: #4f4ff4;
 }
 
 .stat-label {
   font-size: 12px;
-  color: #666;
-  margin-top: 5px;
+  color: #888;
+  margin-top: 8px;
+}
+
+/* Модальное окно */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: #1a1a1a;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid #2a2a2a;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #2a2a2a;
+  background: linear-gradient(135deg, #4f4ff4 0%, #6c6cff 100%);
+  border-radius: 20px 20px 0 0;
+  color: white;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: white;
+  transition: transform 0.2s;
+}
+
+.modal-close:hover {
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  color: white;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: #4f4ff4;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.checkbox-label span {
+  color: #e0e0e0;
+}
+
+.photo-preview {
+  margin-top: 15px;
+  text-align: center;
+  padding: 15px;
+  background: #2a2a2a;
+  border-radius: 10px;
+}
+
+.photo-preview p {
+  margin-bottom: 10px;
+  color: #888;
+  font-size: 12px;
+}
+
+.photo-preview img {
+  max-width: 100px;
+  max-height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  padding: 20px;
+  border-top: 1px solid #2a2a2a;
+}
+
+.btn-cancel,
+.btn-save {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border: 1px solid #3a3a3a;
+}
+
+.btn-cancel:hover {
+  background: #3a3a3a;
+}
+
+.btn-save {
+  background: #4f4ff4;
+  color: white;
+}
+
+.btn-save:hover {
+  background: #6c6cff;
+  transform: translateY(-2px);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .admin-content {
+    padding: 20px;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .actions {
+    justify-content: center;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+  }
+  
+  .employees-table th,
+  .employees-table td {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

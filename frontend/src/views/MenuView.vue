@@ -17,8 +17,17 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import MainMenu from '../components/MainMenu.vue';
-import { demoUserStats, demoDailyChallenge } from '../data/demoData';
 
+const demoUserStats = {
+  totalScore: 0,
+  accuracy: 0,
+  bestStreak: 0
+};
+
+const demoDailyChallenge = {
+  text: 'Правильно угадай 10 коллег подряд',
+  reward: 50
+};
 const router = useRouter();
 const userName = ref('');
 const isAdmin = ref(false);
