@@ -13,30 +13,52 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.Objects;
 
+/**
+ * Пользовательский тип Hibernate для работы с JSONB полями в PostgreSQL
+ * Позволяет сохранять Java объекты как JSON в базе данных
+ *
+ * Используется в QuestionAttempt для поля "options"
+ */
 public class JsonbType implements UserType<Object> {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * SQL тип для JSONB в PostgreSQL
+     */
     @Override
     public int getSqlType() {
-        return Types.OTHER;
+        return Types.OTHER;  // OTHER соответствует JSONB в PostgreSQL
     }
 
+    /**
+     * Класс Java, который представляет этот тип
+     */
     @Override
     public Class<Object> returnedClass() {
         return Object.class;
     }
 
+    /**
+     * Сравнение двух значений
+     */
     @Override
     public boolean equals(Object x, Object y) {
         return Objects.equals(x, y);
     }
 
+    /**
+     * Хэш-код значения
+     */
     @Override
     public int hashCode(Object x) {
         return Objects.hashCode(x);
     }
 
+    /**
+     * Чтение JSON из ResultSet и преобразование в Java объект
+     * Вызывается Hibernate при загрузке данных из БД
+     */
     @Override
     public Object nullSafeGet(ResultSet rs, int position, SharedSessionContractImplementor session, Object owner)
             throws SQLException {
@@ -51,6 +73,10 @@ public class JsonbType implements UserType<Object> {
         }
     }
 
+    /**
+     * Запись Java объекта в JSON и сохранение в БД
+     * Вызывается Hibernate при сохранении данных
+     */
     @Override
     public void nullSafeSet(PreparedStatement st, Object value, int index, SharedSessionContractImplementor session)
             throws SQLException {
@@ -66,6 +92,9 @@ public class JsonbType implements UserType<Object> {
         }
     }
 
+    /**
+     * Глубокое копирование значения
+     */
     @Override
     public Object deepCopy(Object value) {
         if (value == null) return null;
@@ -77,16 +106,25 @@ public class JsonbType implements UserType<Object> {
         }
     }
 
+    /**
+     * Является ли тип изменяемым
+     */
     @Override
     public boolean isMutable() {
         return true;
     }
 
+    /**
+     * Разбор значения для кэширования
+     */
     @Override
     public Serializable disassemble(Object value) {
         return (Serializable) deepCopy(value);
     }
 
+    /**
+     * Сборка значения из кэша
+     */
     @Override
     public Object assemble(Serializable cached, Object owner) {
         return deepCopy(cached);

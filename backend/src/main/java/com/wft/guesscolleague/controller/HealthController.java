@@ -7,9 +7,19 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Контроллер для проверки работоспособности приложения
+ * Используется для health checks (например, в Docker/Kubernetes)
+ */
 @RestController
 public class HealthController {
 
+    /**
+     * Проверка здоровья приложения
+     * GET /health
+     *
+     * @return статус UP если приложение работает
+     */
     @GetMapping("/health")
     public ResponseEntity<Map<String, String>> health() {
         Map<String, String> response = new HashMap<>();
@@ -18,6 +28,12 @@ public class HealthController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Корневой эндпоинт
+     * GET /
+     *
+     * @return базовая информация о сервисе
+     */
     @GetMapping("/")
     public ResponseEntity<Map<String, String>> home() {
         Map<String, String> response = new HashMap<>();

@@ -12,14 +12,25 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Контроллер для диагностики и проверки состояния приложения
+ * Используется для отладки и мониторинга
+ * Доступен по адресу: /api/diagnostic
+ */
 @RestController
 @RequestMapping("/api/diagnostic")
-@RequiredArgsConstructor
+@RequiredArgsConstructor  // Lombok: генерирует конструктор для final полей
 @Tag(name = "Diagnostic Controller", description = "Эндпоинты для диагностики")
 public class DiagnosticController {
 
     private final EmployeeService employeeService;
 
+    /**
+     * Проверяет общее состояние приложения
+     * GET /api/diagnostic/status
+     *
+     * @return статус приложения, количество сотрудников, готовность к игре
+     */
     @Operation(summary = "Проверить статус приложения")
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getStatus() {
@@ -31,7 +42,7 @@ public class DiagnosticController {
         try {
             long employeeCount = employeeService.countActiveEmployees();
             status.put("employeeCount", employeeCount);
-            status.put("canStartGame", employeeCount >= 4);
+            status.put("canStartGame", employeeCount >= 4);  // Для игры нужно минимум 4 сотрудника
             status.put("message", employeeCount >= 4 ?
                     "Ready to play" :
                     "Need at least 4 employees to start game");
@@ -43,6 +54,12 @@ public class DiagnosticController {
         return ResponseEntity.ok(status);
     }
 
+    /**
+     * Получает детальную информацию о всех активных сотрудниках
+     * GET /api/diagnostic/employees
+     *
+     * @return список сотрудников с их данными
+     */
     @Operation(summary = "Получить список всех активных сотрудников с деталями")
     @GetMapping("/employees")
     public ResponseEntity<Map<String, Object>> getEmployeesDiagnostic() {

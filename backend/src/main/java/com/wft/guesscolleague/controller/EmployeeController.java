@@ -14,15 +14,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Контроллер для управления сотрудниками
+ * Доступен по адресу: /api/employees
+ * Используется в админ-панели
+ */
 @RestController
 @RequestMapping("/api/employees")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*")  // Разрешает CORS запросы с фронтенда
 @RequiredArgsConstructor
 @Tag(name = "Employee Controller", description = "API для управления сотрудниками")
 public class EmployeeController {
 
     private final EmployeeService employeeService;
 
+    /**
+     * Получает количество активных сотрудников
+     * GET /api/employees/count
+     *
+     * @return количество активных сотрудников
+     */
     @Operation(summary = "Получить количество активных сотрудников")
     @GetMapping("/count")
     public ResponseEntity<Map<String, Object>> getCount() {
@@ -34,12 +45,25 @@ public class EmployeeController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Получает список всех активных сотрудников
+     * GET /api/employees
+     *
+     * @return список сотрудников
+     */
     @Operation(summary = "Получить всех активных сотрудников")
     @GetMapping
     public ResponseEntity<List<Employee>> getAllActive() {
         return ResponseEntity.ok(employeeService.getAllActiveEmployees());
     }
 
+    /**
+     * Получает сотрудника по ID
+     * GET /api/employees/{id}
+     *
+     * @param id UUID сотрудника
+     * @return данные сотрудника или 404 если не найден
+     */
     @Operation(summary = "Получить сотрудника по ID")
     @GetMapping("/{id}")
     public ResponseEntity<Employee> getEmployee(

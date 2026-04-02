@@ -12,13 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис для работы с сотрудниками
+ * Предоставляет методы для получения, сохранения и удаления сотрудников
+ */
 @Service
-@RequiredArgsConstructor
-@Slf4j
+@RequiredArgsConstructor  // Lombok: создает конструктор для final полей
+@Slf4j  // Lombok: добавляет логгер (log.info, log.error)
 public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
 
+    /**
+     * Получает всех активных сотрудников
+     * Результат кэшируется на 5 минут (см. CacheConfig)
+     * @return список активных сотрудников
+     */
     @Cacheable(value = "employees", key = "'active'")
     public List<Employee> getAllActiveEmployees() {
         log.info("Loading active employees from database");
@@ -27,6 +36,11 @@ public class EmployeeService {
         return employees;
     }
 
+    /**
+     * Получает случайного активного сотрудника
+     * @return случайный сотрудник
+     * @throws IllegalStateException если нет активных сотрудников
+     */
     public Employee getRandomActiveEmployee() {
         List<Employee> activeEmployees = getAllActiveEmployees();
         if (activeEmployees.isEmpty()) {
@@ -40,35 +54,56 @@ public class EmployeeService {
         return employee;
     }
 
+    /**
+     * Получает N случайных активных сотрудников, исключая указанного
+     * Используется для генерации дистракторов (неправильных вариантов ответов)
+     *
+     * @param excludeId ID сотрудника, которого нужно исключить (правильный ответ)
+     * @param count количество нужных сотрудников
+     * @return список случайных сотрудников
+     */
     public List<Employee> getRandomActiveEmployees(UUID excludeId, int count) {
         List<Employee> activeEmployees = getAllActiveEmployees();
         log.info("Getting {} random employees excluding ID: {}", count, excludeId);
 
+        // Исключаем правильный ответ
         List<Employee> candidates = activeEmployees.stream()
                 .filter(e -> !e.getId().equals(excludeId))
                 .collect(Collectors.toList());
 
         log.info("Candidates count: {}", candidates.size());
 
+        // Если недостаточно сотрудников, возвращаем сколько есть
         if (candidates.size() < count) {
             log.warn("Not enough active employees: {} available, need {}", candidates.size(), count);
-            // Если недостаточно, возвращаем сколько есть
             return candidates;
         }
 
+        // Перемешиваем и берем первых count
         Collections.shuffle(candidates);
         List<Employee> selected = candidates.subList(0, count);
         log.info("Selected {} employees", selected.size());
         return selected;
     }
 
+    /**
+     * Сохраняет нового сотрудника (или обновляет существующего)
+     * При изменении очищает кэш сотрудников
+     * @param employee сотрудник для сохранения
+     * @return сохраненный сотрудник
+     */
     @Transactional
-    @CacheEvict(value = "employees", allEntries = true)
+    @CacheEvict(value = "employees", allEntries = true)  // Очищает весь кэш employees
     public Employee saveEmployee(Employee employee) {
         log.info("Saving employee: {}", employee.getFullName());
         return employeeRepository.save(employee);
     }
 
+    /**
+     * Мягкое удаление сотрудника (установка isActive = false)
+     * При изменении очищает кэш сотрудников
+     * @param id ID сотрудника
+     */
     @Transactional
     @CacheEvict(value = "employees", allEntries = true)
     public void deleteEmployee(UUID id) {
@@ -76,6 +111,10 @@ public class EmployeeService {
         employeeRepository.updateActiveStatus(id);
     }
 
+    /**
+     * Получает количество активных сотрудников
+     * @return количество активных сотрудников
+     */
     public long countActiveEmployees() {
         long count = employeeRepository.countByIsActiveTrue();
         log.info("Active employees count: {}", count);

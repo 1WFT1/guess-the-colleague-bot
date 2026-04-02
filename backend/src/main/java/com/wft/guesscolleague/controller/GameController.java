@@ -17,6 +17,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+/**
+ * Основной игровой контроллер
+ * Обрабатывает все игровые действия пользователя
+ * Доступен по адресу: /api/game
+ */
 @RestController
 @RequestMapping("/api/game")
 @CrossOrigin(origins = "*")
@@ -26,6 +31,14 @@ public class GameController {
 
     private final GameService gameService;
 
+    /**
+     * Создает новую игровую сессию
+     * POST /api/game/session?userId=123&chatId=123
+     *
+     * @param userId ID пользователя в Telegram
+     * @param chatId ID чата в Telegram
+     * @return UUID созданной сессии
+     */
     @Operation(summary = "Создать игровую сессию",
             description = "Создает новую игровую сессию для пользователя или возвращает существующую активную")
     @ApiResponses(value = {
@@ -44,6 +57,13 @@ public class GameController {
         return ResponseEntity.ok(sessionId);
     }
 
+    /**
+     * Генерирует следующий вопрос для игровой сессии
+     * GET /api/game/next-question?sessionId=xxx
+     *
+     * @param sessionId ID активной игровой сессии
+     * @return вопрос с фото и вариантами ответов
+     */
     @Operation(summary = "Получить следующий вопрос",
             description = "Генерирует и возвращает следующий вопрос для игровой сессии")
     @ApiResponses(value = {
@@ -60,6 +80,13 @@ public class GameController {
         return ResponseEntity.ok(question);
     }
 
+    /**
+     * Обрабатывает ответ пользователя на вопрос
+     * POST /api/game/answer
+     *
+     * @param request данные ответа (sessionId, questionId, selectedOptionIndex)
+     * @return результат проверки ответа (правильно/неправильно, начисленные очки)
+     */
     @Operation(summary = "Отправить ответ на вопрос",
             description = "Проверяет ответ пользователя и начисляет баллы")
     @ApiResponses(value = {
