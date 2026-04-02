@@ -1,25 +1,41 @@
 <template>
   <div class="game-board">
-    <div class="score-header">
-      <div class="score-card">
-        <div class="score-icon">🎯</div>
-        <div class="score-info">
-          <div class="score-label">ОЧКИ</div>
-          <div class="score-value">{{ gameStore.score }}</div>
+    <div class="stats-header">
+      <!-- Карточка очков -->
+      <div class="stat-card score-card">
+        <div class="stat-icon">
+          <img src="C:\Users\user\IdeaProjects\guess-the-colleague-bot\frontend\src\assets\images\score_icon.png" alt="Очки" class="stat-icon-img" />
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">ОЧКИ</div>
+          <div class="stat-value">{{ gameStore.score }}</div>
         </div>
       </div>
-      <div class="streak-card" v-if="gameStore.currentStreak > 0 || gameStore.bestStreak > 0">
-        <div class="streak-icon">🔥</div>
-        <div class="streak-info">
-          <div class="streak-label">СЕРИЯ</div>
-          <div class="streak-value">{{ gameStore.currentStreak }}</div>
-          <div class="best-streak">Рекорд: {{ gameStore.bestStreak }}</div>
+
+      <!-- Карточка серии -->
+      <div class="stat-card streak-card" v-if="gameStore.currentStreak > 0 || gameStore.bestStreak > 0">
+        <div class="stat-icon">🔥</div>
+        <div class="stat-content">
+          <div class="stat-label">СЕРИЯ</div>
+          <div class="stat-value">{{ gameStore.currentStreak }}</div>
+          <div class="stat-record-full">
+            <span class="record-label">РЕКОРД</span>
+            <span class="record-value">{{ gameStore.bestStreak }}</span>
+          </div>
         </div>
       </div>
-      <div class="stats-card">
-        <div class="stats-icons">
-          <span>✅ {{ gameStore.correctCount }}</span>
-          <span>❌ {{ gameStore.wrongCount }}</span>
+
+      <!-- Карточка статистики -->
+      <div class="stat-card stats-card">
+        <div class="stat-icons">
+          <div class="stat-badge correct">
+            <span class="badge-icon">✓</span>
+            <span class="badge-count">{{ gameStore.correctCount }}</span>
+          </div>
+          <div class="stat-badge wrong">
+            <span class="badge-icon">✗</span>
+            <span class="badge-count">{{ gameStore.wrongCount }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -62,7 +78,6 @@
 
       <div v-if="gameStore.feedback" class="feedback-overlay">
         <div class="feedback-card" :class="gameStore.feedback.isCorrect ? 'correct' : 'wrong'">
-          <div class="feedback-icon">{{ gameStore.feedback.isCorrect ? '🎉' : '😢' }}</div>
           <div class="feedback-title">{{ gameStore.feedback.isCorrect ? 'ВЕРНО!' : 'ОШИБКА!' }}</div>
           <div class="feedback-points">{{ gameStore.feedback.isCorrect ? '+' : '' }}{{ gameStore.feedback.pointsDelta }} баллов</div>
           <div class="feedback-details" v-if="!gameStore.feedback.isCorrect">
@@ -198,11 +213,12 @@ watch(() => gameStore.currentQuestion, (question) => {
 .game-board {
   max-width: 600px;
   margin: 0 auto;
-  background: white;
+  background: #1a1a1a;
   border-radius: 30px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   animation: slideIn 0.5s ease;
+  border: 1px solid #2a2a2a;
 }
 
 @keyframes slideIn {
@@ -216,57 +232,198 @@ watch(() => gameStore.currentQuestion, (question) => {
   }
 }
 
-.score-header {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 15px;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.stats-header {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
 }
 
-.score-card, .streak-card, .stats-card {
-  background: rgba(255,255,255,0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 15px;
-  padding: 10px;
+.stat-card {
+  flex: 1;
+  min-width: 0;
+  background: #2a2a2a;
+  border-radius: 16px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: white;
+  gap: 8px;
+  transition: all 0.3s ease;
+  border: 1px solid #3a3a3a;
 }
 
-.score-icon, .streak-icon {
-  font-size: 24px;
+/* Для карточки очков */
+.score-card {
+  flex: 0.8;
 }
 
-.score-info, .streak-info {
+/* Для карточки серии */
+.streak-card {
+  flex: 0.9;
+}
+
+/* Для карточки статистики */
+.stats-card {
   flex: 1;
 }
 
-.score-label, .streak-label {
-  font-size: 10px;
-  opacity: 0.8;
-}
-
-.score-value, .streak-value {
-  font-size: 24px;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.stats-card {
-  justify-content: center;
-}
-
-.stats-icons {
+.stat-icon {
+  width: 32px;
+  height: 32px;
   display: flex;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.stat-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 9px;
+  color: #888;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #4f4ff4;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Специфичные стили для серии */
+.streak-card .stat-value {
+  color: #ff9800;
+  font-size: 20px;
+}
+
+.stat-record-full {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.record-label {
+  font-size: 9px;
+  color: #888;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.record-value {
+  font-size: 11px;
+  font-weight: bold;
+  color: #ff9800;
+  background: rgba(255, 152, 0, 0.15);
+  padding: 1px 6px;
+  border-radius: 12px;
+}
+
+/* Статистика правильных/неправильных */
+.stat-icons {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.stat-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  transition: all 0.2s ease;
+}
+
+.stat-badge.correct {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.stat-badge.wrong {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+}
+
+.badge-icon {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.badge-count {
   font-size: 14px;
   font-weight: bold;
 }
 
+/* При наведении */
+.stat-badge:hover {
+  transform: translateY(-1px);
+}
+
+.stat-badge.correct:hover {
+  background: rgba(76, 175, 80, 0.25);
+}
+
+.stat-badge.wrong:hover {
+  background: rgba(244, 67, 54, 0.25);
+}
+
+/* Для мобильных */
+@media (max-width: 500px) {
+  .stats-header {
+    gap: 8px;
+    padding: 12px;
+  }
+  
+  .stat-card {
+    padding: 8px;
+  }
+  
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+  
+  .stat-value {
+    font-size: 16px;
+  }
+  
+  .stat-label {
+    font-size: 8px;
+  }
+  
+  .badge-count {
+    font-size: 10px;
+  }
+}
+
 .question-area {
   padding: 30px;
+  padding-bottom: 0px;
   animation: fadeIn 0.5s ease;
 }
 
@@ -423,76 +580,110 @@ watch(() => gameStore.currentQuestion, (question) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.3s ease;
+  padding-top: 200px;
+  pointer-events: none;
 }
 
 .feedback-card {
   background: white;
-  padding: 30px;
-  border-radius: 30px;
+  padding: 25px 35px;
+  border-radius: 20px;
   text-align: center;
-  max-width: 300px;
-  animation: slideUp 0.3s ease;
+  max-width: 320px;
+  animation: slideDownFade 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(50px);
+@keyframes slideDownFade {
+  0% {
     opacity: 0;
+    transform: translateY(-60px) scale(0.9);
   }
-  to {
-    transform: translateY(0);
+  100% {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
 .feedback-card.correct {
-  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
   color: white;
 }
 
 .feedback-card.wrong {
-  background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
+  background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
   color: white;
 }
 
-.feedback-icon {
-  font-size: 48px;
-  margin-bottom: 15px;
+
+@keyframes bounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
 }
 
 .feedback-title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: bold;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .feedback-points {
-  font-size: 20px;
-  margin-bottom: 15px;
+  font-size: 18px;
+  margin-bottom: 12px;
+  font-weight: bold;
 }
 
 .feedback-details {
-  margin: 15px 0;
-  padding: 10px;
-  background: rgba(255,255,255,0.2);
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
-}
-
-.feedback-streak {
-  margin: 15px 0;
   font-size: 14px;
 }
 
+.feedback-streak {
+  margin: 12px 0;
+  font-size: 13px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  display: inline-block;
+}
+
 .loading-next {
-  margin-top: 15px;
-  font-size: 12px;
+  margin-top: 12px;
+  font-size: 11px;
   opacity: 0.8;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Убираем лишние анимации */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .error-message {
@@ -568,4 +759,63 @@ watch(() => gameStore.currentQuestion, (question) => {
     font-size: 20px;
   }
 }
+
+.stats-icons span:first-child {
+  color: #4caf50;
+}
+
+.stats-icons span:last-child {
+  color: #f44336;
+}
+
+.question-text {
+  color: #4f4ff4;
+}
+
+.option-btn {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  color: #ffffff;
+}
+
+.option-btn:hover:not(:disabled) {
+  background: #4f4ff4;
+  border-color: #4f4ff4;
+  color: white;
+}
+
+.option-letter {
+  background: #4f4ff4;
+  color: white;
+}
+
+.feedback-card.correct {
+  background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+}
+
+.feedback-card.wrong {
+  background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
+}
+
+.menu-back-btn {
+  background: #2a2a2a;
+  color: #4f4ff4;
+  border: 1px solid #3a3a3a;
+}
+
+.menu-back-btn:hover {
+  background: #4f4ff4;
+  color: white;
+}
+
+.error-message {
+  background: #c62828;
+  color: white;
+}
+
+.loader {
+  border: 3px solid #2a2a2a;
+  border-top: 3px solid #4f4ff4;
+}
+
 </style>

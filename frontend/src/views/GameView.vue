@@ -5,12 +5,11 @@
       <div v-if="currentView === 'menu'" class="menu-wrapper">
         <div class="simple-menu">
           <div class="simple-menu-header">
-            <div class="logo-icon">🎮</div>
             <h1 class="simple-title">Угадай коллегу</h1>
           </div>
 
-          <!-- Отображение статистики в меню -->
-          <div class="stats-preview" v-if="gameStore.totalQuestions > 0">
+          <!-- Отображение статистики в меню - всегда показываем, даже если 0 -->
+          <div class="stats-preview">
             <div class="preview-card">
               <div class="preview-value">{{ gameStore.score }}</div>
               <div class="preview-label">Всего очков</div>
@@ -27,7 +26,7 @@
           
           <div class="simple-buttons">
             <button @click="startGame" class="simple-btn primary">
-              🎮 Начать игру
+              Начать игру
             </button>
             <button @click="showLeaderboard" class="simple-btn">
               🏆 Лидерборд
@@ -38,19 +37,21 @@
             <button v-if="isAdmin" @click="showAdmin" class="simple-btn admin">
               ⚙️ Админ-панель
             </button>
-            <button @click="resetAllStats" class="simple-btn reset">
-              🔄 Сбросить статистику
-            </button>
           </div>
           
           <div class="simple-mascot">
-            <div class="mascot-emoji">🐱</div>
+            <img 
+              src="C:\Users\user\IdeaProjects\guess-the-colleague-bot\frontend\src\assets\images\codic_start.png" 
+              alt="Маскот" 
+              class="mascot-image"
+              @error="handleImageError"
+            />
             <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
           </div>
         </div>
       </div>
       
-      <!-- Игровое поле -->
+      <!-- Остальные вьюхи без изменений -->
       <div v-if="currentView === 'game'" class="game-wrapper">
         <GameBoard 
           :key="gameKey"
@@ -61,7 +62,6 @@
         />
       </div>
       
-      <!-- Лидерборд -->
       <div v-if="currentView === 'leaderboard'" class="leaderboard-wrapper">
         <Leaderboard
           :players="leaderboardData"
@@ -73,7 +73,6 @@
         />
       </div>
       
-      <!-- Статистика -->
       <div v-if="currentView === 'stats'" class="stats-wrapper">
         <PlayerStats
           @close="currentView = 'menu'"
@@ -82,7 +81,6 @@
         />
       </div>
       
-      <!-- Админ-панель -->
       <div v-if="currentView === 'admin'" class="admin-wrapper">
         <AdminPanel
           @close="currentView = 'menu'"
@@ -111,17 +109,70 @@ const gameMode = ref<'name' | 'department'>('name');
 const isAdmin = ref(false);
 const gameKey = ref(0);
 
-// Данные для лидерборда (временно демо)
-const leaderboardData = ref([
-  { userId: 1, fullName: 'Анна Иванова', totalScore: 1250, accuracy: 85, rank: 1 },
-  { userId: 2, fullName: 'Петр Сидоров', totalScore: 1120, accuracy: 78, rank: 2 },
-  { userId: 3, fullName: 'Елена Козлова', totalScore: 980, accuracy: 72, rank: 3 },
-]);
+// Реальные данные для лидерборда из localStorage
+const leaderboardData = computed(() => {
+  const allStats = localStorage.getItem('allPlayersStats');
+  if (allStats) {
+    try {
+      const players = JSON.parse(allStats);
+      // Добавляем текущего игрока
+      const currentStats = localStorage.getItem('gameStats');
+      if (currentStats) {
+        const stats = JSON.parse(currentStats);
+        const currentPlayer = {
+          userId: userId.value,
+          fullName: userName.value || 'Вы',
+          totalScore: stats.score || 0,
+          accuracy: Math.round((stats.correctCount / (stats.correctCount + stats.wrongCount || 1)) * 100)
+        };
+        
+        // Обновляем или добавляем текущего игрока
+        const existingIndex = players.findIndex((p: any) => p.userId === userId.value);
+        if (existingIndex !== -1) {
+          players[existingIndex] = currentPlayer;
+        } else {
+          players.push(currentPlayer);
+        }
+      }
+      
+      // Сортируем по очкам
+      players.sort((a: any, b: any) => b.totalScore - a.totalScore);
+      
+      // Добавляем ранги
+      players.forEach((p: any, idx: number) => {
+        p.rank = idx + 1;
+      });
+      
+      return players;
+    } catch (e) {
+      console.error('Failed to load leaderboard', e);
+    }
+  }
+  return [];
+});
 
-const currentUserRank = ref({
-  rank: 24,
-  totalScore: 425,
-  toTop: 70
+
+// Реальная позиция текущего пользователя
+const currentUserRank = computed(() => {
+  const players = leaderboardData.value;
+  const currentPlayer = players.find((p: any) => p.userId === userId.value);
+  
+  if (currentPlayer) {
+    const top10Score = players[9]?.totalScore || 0;
+    const toTop = top10Score - (currentPlayer.totalScore || 0);
+    
+    return {
+      rank: currentPlayer.rank,
+      totalScore: currentPlayer.totalScore,
+      toTop: toTop > 0 ? toTop : 0
+    };
+  }
+  
+  return {
+    rank: 1,
+    totalScore: 0,
+    toTop: 0
+  };
 });
 
 const startGame = () => {
@@ -155,15 +206,26 @@ const showAdmin = () => {
   currentView.value = 'admin';
 };
 
-const resetAllStats = () => {
-  if (confirm('Вы уверены, что хотите сбросить всю статистику? Это действие нельзя отменить.')) {
-    gameStore.resetStats();
-    alert('Статистика сброшена!');
+
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.style.display = 'none';
+  const parent = img.parentElement;
+  if (parent) {
+    const fallback = document.createElement('div');
+    fallback.className = 'mascot-emoji-fallback';
+    fallback.textContent = '🐱';
+    parent.insertBefore(fallback, img);
   }
 };
 
+
 onMounted(() => {
-  console.log('GameView mounted');
+  console.log('GameView mounted, current stats from store:', {
+    score: gameStore.score,
+    correct: gameStore.correctCount,
+    accuracy: gameStore.accuracy
+  });
   
   const telegram = (window as any).Telegram?.WebApp;
   if (telegram) {
@@ -187,9 +249,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Стили остаются те же (темная тема) */
 .game-view {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #000000;
   padding: 20px;
 }
 
@@ -199,11 +262,12 @@ onMounted(() => {
 }
 
 .simple-menu {
-  background: white;
+  background: #1a1a1a;
   border-radius: 30px;
   padding: 40px 30px;
   text-align: center;
   animation: slideIn 0.5s ease;
+  border: 1px solid #2a2a2a;
 }
 
 @keyframes slideIn {
@@ -228,7 +292,7 @@ onMounted(() => {
 
 .simple-title {
   font-size: 28px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4f4ff4 0%, #6c6cff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -243,26 +307,28 @@ onMounted(() => {
 }
 
 .preview-card {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: #2a2a2a;
   padding: 15px;
   border-radius: 15px;
   text-align: center;
   transition: transform 0.3s;
+  border: 1px solid #3a3a3a;
 }
 
 .preview-card:hover {
   transform: translateY(-3px);
+  border-color: #4f4ff4;
 }
 
 .preview-value {
   font-size: 24px;
   font-weight: bold;
-  color: #667eea;
+  color: #4f4ff4;
 }
 
 .preview-label {
   font-size: 11px;
-  color: #666;
+  color: #888;
   margin-top: 5px;
 }
 
@@ -281,27 +347,46 @@ onMounted(() => {
   border-radius: 15px;
   cursor: pointer;
   transition: all 0.3s;
-  background: #f8f9fa;
-  color: #667eea;
+  background: #2a2a2a;
+  color: #ffffff;
   text-align: center;
+  border: 1px solid #3a3a3a;
 }
 
 .simple-btn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 20px rgba(102,126,234,0.2);
+  box-shadow: 0 10px 20px rgba(79, 79, 244, 0.2);
+  border-color: #4f4ff4;
 }
 
 .simple-btn.primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #4f4ff4;
   color: white;
+  border: none;
+}
+
+.simple-btn.primary:hover {
+  background: #6c6cff;
+  box-shadow: 0 10px 20px rgba(79, 79, 244, 0.3);
 }
 
 .simple-btn.admin {
-  background: #f44336;
+  background: #dc2626;
   color: white;
+  border: none;
+}
+
+.simple-btn.admin:hover {
+  background: #ef4444;
 }
 
 .simple-btn.reset {
+  background: #2a2a2a;
+  color: #ff9800;
+  border: 1px solid #ff9800;
+}
+
+.simple-btn.reset:hover {
   background: #ff9800;
   color: white;
 }
@@ -309,18 +394,37 @@ onMounted(() => {
 .simple-mascot {
   margin-top: 20px;
   padding: 20px;
-  background: #f8f9fa;
+  background: #2a2a2a;
   border-radius: 20px;
+  border: 1px solid #3a3a3a;
+  text-align: center;
 }
 
-.mascot-emoji {
-  font-size: 50px;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.mascot-image {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  margin-bottom: 10px;
+  animation: float 3s ease-in-out infinite;
+}
+
+.mascot-emoji-fallback {
+  font-size: 60px;
   margin-bottom: 10px;
 }
 
 .mascot-message {
   font-size: 14px;
-  color: #666;
+  color: #888;
   font-style: italic;
 }
 

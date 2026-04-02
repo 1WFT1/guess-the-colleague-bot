@@ -17,9 +17,11 @@ import GameView from './views/GameView.vue';
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #000000;
 }
 
 #app {
   min-height: 100vh;
+  background: #000000;
 }
 </style>

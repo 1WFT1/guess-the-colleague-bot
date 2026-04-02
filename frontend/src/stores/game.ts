@@ -4,11 +4,14 @@ import gameApi from '../api/game';
 import type { Question, AnswerResponse } from '../types/game';
 
 export const useGameStore = defineStore('game', () => {
-    const getCurrentWeekDay = () => {
+  const getWeekDay = (): string => {
     const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
     const today = new Date().getDay();
-    return days[today];
-    };
+    const day = days[today];
+    return day || 'Пн';
+  };
+
+
 
   // State
   const sessionId = ref<string | null>(null);
@@ -54,14 +57,14 @@ export const useGameStore = defineStore('game', () => {
   };
 
   // Сохранение статистики
-    const saveStats = () => {
+  const saveStats = () => {
     const stats = {
-        score: score.value,
-        correctCount: correctCount.value,
-        wrongCount: wrongCount.value,
-        bestStreak: bestStreak.value,
-        currentStreak: currentStreak.value,
-        lastUpdated: new Date().toISOString()
+      score: score.value,
+      correctCount: correctCount.value,
+      wrongCount: wrongCount.value,
+      bestStreak: bestStreak.value,
+      currentStreak: currentStreak.value,
+      lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('gameStats', JSON.stringify(stats));
     
@@ -73,36 +76,26 @@ export const useGameStore = defineStore('game', () => {
     
     console.log('Saved stats:', stats);
     console.log('Saved weekly stats:', weeklyStats);
-    };
+  };
 
-    const getWeeklyStats = () => {
+  const getWeeklyStats = (): Record<string, number> => {
     const saved = localStorage.getItem('weeklyStats');
     if (saved) {
-        try {
+      try {
         return JSON.parse(saved);
-        } catch (e) {
+      } catch (e) {
         console.error('Failed to parse weekly stats', e);
-        }
+      }
     }
     return {
-        'Пн': 0, 'Вт': 0, 'Ср': 0, 'Чт': 0, 'Пт': 0, 'Сб': 0, 'Вс': 0
+      'Пн': 0,
+      'Вт': 0,
+      'Ср': 0,
+      'Чт': 0,
+      'Пт': 0,
+      'Сб': 0,
+      'Вс': 0
     };
-    };
-
-    const getWeekDay = () => {
-    const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    const today = new Date().getDay();
-    return days[today];
-    };
-
-  // Сброс статистики
-  const resetStats = () => {
-    score.value = 0;
-    correctCount.value = 0;
-    wrongCount.value = 0;
-    currentStreak.value = 0;
-    bestStreak.value = 0;
-    saveStats();
   };
 
   const initGame = async (telegramUserId: number, telegramChatId?: number) => {
@@ -111,9 +104,9 @@ export const useGameStore = defineStore('game', () => {
       error.value = null;
       userId.value = telegramUserId;
       
-      // Загружаем сохраненную статистику ВСЕГДА при входе в игру
-      const hasStats = loadSavedStats();
-      console.log('Loaded stats on game init:', { hasStats, score: score.value, correct: correctCount.value });
+      // Загружаем сохраненную статистику
+      loadSavedStats();
+      console.log('Loaded stats on game init:', { score: score.value, correct: correctCount.value });
       
       // Создаем новую сессию
       const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
@@ -187,7 +180,7 @@ export const useGameStore = defineStore('game', () => {
         console.log('❌ Wrong answer. Correct is:', result.correctAnswer);
       }
       
-      // Сохраняем статистику ПОСЛЕ каждого ответа
+      // Сохраняем статистику
       saveStats();
       
       feedback.value = {
@@ -217,9 +210,11 @@ export const useGameStore = defineStore('game', () => {
     feedback.value = null;
     error.value = null;
     isGameActive.value = true;
-    // НЕ сбрасываем статистику!
     console.log('Game reset, stats preserved:', { score: score.value, correct: correctCount.value });
   };
+
+  // Загружаем статистику при создании стора
+  loadSavedStats();
 
   return {
     // State
@@ -245,7 +240,6 @@ export const useGameStore = defineStore('game', () => {
     loadNextQuestion,
     submitAnswer,
     resetGame,
-    resetStats,
     loadSavedStats,
   };
 });

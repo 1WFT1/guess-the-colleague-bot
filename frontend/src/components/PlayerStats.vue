@@ -41,9 +41,21 @@
         <div class="weekly-chart">
           <h3>НЕДЕЛЬНАЯ ДИНАМИКА</h3>
           <div class="chart-bars">
-            <div v-for="(score, day) in weeklyStats" :key="day" class="chart-bar-container">
-              <div class="chart-bar" :style="{ height: `${getBarHeight(score)}%` }">
-                <span class="bar-value">{{ score }}</span>
+            <div 
+              v-for="(score, day) in weeklyStats" 
+              :key="day" 
+              class="chart-bar-container"
+            >
+              <div class="chart-bar-wrapper">
+                <div 
+                  class="chart-bar" 
+                  :style="{ 
+                    height: `${getBarHeight(score)}%`,
+                    backgroundColor: '#4f4ff4'
+                  }"
+                >
+                  <span class="bar-value">{{ score }}</span>
+                </div>
               </div>
               <div class="bar-label">{{ day }}</div>
             </div>
@@ -62,10 +74,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useGameStore } from '../stores/game';
-import { useRouter } from 'vue-router';
 
 const gameStore = useGameStore();
-const router = useRouter();
+
+const emit = defineEmits<{
+  close: [];
+  play: [];
+  'show-leaderboard': [];
+}>();
 
 // Реальная недельная статистика из localStorage
 const weeklyStats = computed(() => {
@@ -78,34 +94,43 @@ const weeklyStats = computed(() => {
     }
   }
   
-  // Если нет сохраненной статистики, показываем текущие данные
-  return {
-    'Пн': gameStore.score || 0,
-    'Вт': 0,
-    'Ср': 0,
-    'Чт': 0,
-    'Пт': 0,
-    'Сб': 0,
-    'Вс': 0
-  };
+  const today = new Date().getDay();
+  const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  const stats: Record<string, number> = {};
+  days.forEach(day => {
+    stats[day] = 0;
+  });
+  const todayName = days[today];
+  stats[todayName] = gameStore.score;
+  
+  return stats;
+});
+
+const maxScore = computed(() => {
+  const scores = Object.values(weeklyStats.value);
+  return Math.max(...scores, 1);
 });
 
 const getBarHeight = (score: number) => {
-  const maxScore = Math.max(...Object.values(weeklyStats.value), 100);
-  return (score / maxScore) * 100;
+  if (score === 0) return 10;
+  return (score / maxScore.value) * 100;
 };
 
+const getBarColor = (score: number) => {
+  if (score === 0) return '#3a3a3a';
+  if (score === maxScore.value) return '#4f4ff4';
+  const intensity = score / maxScore.value;
+  return `rgba(79, 79, 244, ${0.3 + intensity * 0.7})`;
+};
+
+// Исправленные функции - используем emit вместо router
 const playGame = () => {
-  router.push('/game');
+  emit('play');
 };
 
 const showLeaderboard = () => {
-  router.push('/leaderboard');
+  emit('show-leaderboard');
 };
-
-defineEmits<{
-  close: [];
-}>();
 </script>
 
 <style scoped>
@@ -115,42 +140,57 @@ defineEmits<{
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  transition: background 0.3s ease;
+  animation: fadeInBg 0.3s ease forwards;
 }
 
 .stats-content {
-  background: white;
+  background: #1a1a1a;
   border-radius: 30px;
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  animation: slideUp 0.3s ease;
+  opacity: 0;
+  transform: translateY(30px) scale(0.95);
+  animation: slideInContent 0.4s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+  border: 1px solid #2a2a2a;
 }
 
-@keyframes slideUp {
+@keyframes fadeInBg {
   from {
-    transform: translateY(50px);
-    opacity: 0;
+    background: rgba(0, 0, 0, 0);
   }
   to {
-    transform: translateY(0);
-    opacity: 1;
+    background: rgba(0, 0, 0, 0.85);
   }
 }
+
+@keyframes slideInContent {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 
 .stats-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-bottom: 1px solid #2a2a2a;
+  background: linear-gradient(135deg, #4f4ff4 0%, #6c6cff 100%);
   color: white;
   border-radius: 30px 30px 0 0;
 }
@@ -184,34 +224,39 @@ defineEmits<{
 }
 
 .stat-card {
-  background: #f8f9fa;
+  background: #2a2a2a;
   padding: 15px;
   border-radius: 15px;
   text-align: center;
   transition: transform 0.3s;
+  border: 1px solid #3a3a3a;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  border-color: #4f4ff4;
 }
 
 .stat-value {
   font-size: 28px;
   font-weight: bold;
-  color: #667eea;
+  color: #4f4ff4;
 }
 
 .stat-label {
   font-size: 12px;
-  color: #666;
+  color: #888;
   margin-top: 5px;
+}
+
+.weekly-chart {
+  margin-top: 20px;
 }
 
 .weekly-chart h3 {
   text-align: center;
   margin-bottom: 20px;
-  color: #333;
+  color: white;
   font-size: 16px;
 }
 
@@ -219,8 +264,9 @@ defineEmits<{
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
-  height: 200px;
+  height: 250px;
   gap: 10px;
+  padding: 10px 0;
 }
 
 .chart-bar-container {
@@ -231,28 +277,44 @@ defineEmits<{
   gap: 10px;
 }
 
+.chart-bar-wrapper {
+  width: 100%;
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
 .chart-bar {
   width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 5px 5px 0 0;
-  transition: height 0.3s;
+  max-width: 50px;
+  min-width: 30px;
+  background: linear-gradient(135deg, #4f4ff4 0%, #6c6cff 100%);
+  border-radius: 8px 8px 0 0;
+  transition: all 0.5s ease;
   position: relative;
-  min-height: 30px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding-top: 5px;
+  cursor: pointer;
+}
+
+.chart-bar:hover {
+  transform: scaleX(1.05);
+  filter: brightness(1.1);
 }
 
 .bar-value {
   color: white;
   font-size: 11px;
   font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .bar-label {
   font-size: 12px;
-  color: #666;
+  color: #888;
   font-weight: 500;
 }
 
@@ -260,13 +322,13 @@ defineEmits<{
   padding: 20px;
   display: flex;
   gap: 15px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #2a2a2a;
 }
 
 .action-btn {
   flex: 1;
   padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #4f4ff4;
   color: white;
   border: none;
   border-radius: 15px;
@@ -278,11 +340,17 @@ defineEmits<{
 
 .action-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102,126,234,0.3);
+  box-shadow: 0 5px 15px rgba(79, 79, 244, 0.3);
 }
 
 .action-btn.secondary {
-  background: #f0f0f0;
-  color: #667eea;
+  background: #2a2a2a;
+  color: #4f4ff4;
+  border: 1px solid #3a3a3a;
+}
+
+.action-btn.secondary:hover {
+  color: white;
+  border-color: #4f4ff4;
 }
 </style>
