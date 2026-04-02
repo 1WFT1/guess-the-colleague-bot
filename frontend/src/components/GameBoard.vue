@@ -155,11 +155,11 @@ const mascotMessage = computed(() => {
 const handleAnswer = async (index: number) => {
   if (!gameStore.isLoading && !gameStore.feedback && gameStore.currentQuestion) {
     await gameStore.submitAnswer(index);
-    
+
     if (gameStore.feedback?.isCorrect) {
-      currentStreak.value++;
+      gameStore.currentStreak = gameStore.currentStreak + 1;
     } else {
-      currentStreak.value = 0;
+      gameStore.currentStreak = 0;
       showCorrectAnswer.value = true;
       correctAnswerName.value = gameStore.feedback?.correctAnswer || '';
       setTimeout(() => {

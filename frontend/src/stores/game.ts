@@ -4,12 +4,39 @@ import gameApi from '../api/game';
 import type { Question, AnswerResponse } from '../types/game';
 
 export const useGameStore = defineStore('game', () => {
-  const getWeekDay = (): string => {
-    const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    const today = new Date().getDay();
-    const day = days[today];
-    return day || 'Пн';
+  type WeekDay = 'Пн' | 'Вт' | 'Ср' | 'Чт' | 'Пт' | 'Сб' | 'Вс';
+  const getWeekDay = (): WeekDay => {
+    const now = new Date();
+    const days: WeekDay[] = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const dayIndex = now.getDay();
+    
+    // Используем утверждение типа, так как dayIndex всегда 0-6
+    return days[dayIndex] as WeekDay;
   };
+
+  // Тип для недельной статистики
+  interface WeeklyStatsType {
+    Пн: number;
+    Вт: number;
+    Ср: number;
+    Чт: number;
+    Пт: number;
+    Сб: number;
+    Вс: number;
+    weekKey?: string;
+    totalScore?: number;
+  }
+
+  const getWeekStart = (): Date => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diff);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  };
+
 
 
 
@@ -68,34 +95,86 @@ export const useGameStore = defineStore('game', () => {
     };
     localStorage.setItem('gameStats', JSON.stringify(stats));
     
-    // Сохраняем недельную статистику
-    const today = getWeekDay();
-    const weeklyStats = getWeeklyStats();
-    weeklyStats[today] = score.value;
-    localStorage.setItem('weeklyStats', JSON.stringify(weeklyStats));
+    // Сохраняем недельную статистику с текущим счетом
+    saveWeeklyStats(score.value);
     
     console.log('Saved stats:', stats);
-    console.log('Saved weekly stats:', weeklyStats);
   };
 
-  const getWeeklyStats = (): Record<string, number> => {
-    const saved = localStorage.getItem('weeklyStats');
+  interface WeeklyStatsType {
+    Пн: number;
+    Вт: number;
+    Ср: number;
+    Чт: number;
+    Пт: number;
+    Сб: number;
+    Вс: number;
+    weekKey?: string;
+    totalScore?: number;
+  }
+
+  const getWeeklyStats = (): WeeklyStatsType => {
+    const weekStart = getWeekStart();
+    const weekKey = weekStart.toISOString().split('T')[0];
+    
+    const saved = localStorage.getItem(`weeklyStats_${weekKey}`);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          Пн: parsed.Пн ?? 0,
+          Вт: parsed.Вт ?? 0,
+          Ср: parsed.Ср ?? 0,
+          Чт: parsed.Чт ?? 0,
+          Пт: parsed.Пт ?? 0,
+          Сб: parsed.Сб ?? 0,
+          Вс: parsed.Вс ?? 0,
+          weekKey: weekKey,
+          totalScore: parsed.totalScore ?? 0
+        };
       } catch (e) {
         console.error('Failed to parse weekly stats', e);
       }
     }
+    
     return {
-      'Пн': 0,
-      'Вт': 0,
-      'Ср': 0,
-      'Чт': 0,
-      'Пт': 0,
-      'Сб': 0,
-      'Вс': 0
+      Пн: 0, Вт: 0, Ср: 0, Чт: 0, Пт: 0, Сб: 0, Вс: 0,
+      weekKey: weekKey,
+      totalScore: 0
     };
+  };
+
+  // Сохранение недельной статистики
+  const saveWeeklyStats = (currentScore: number): void => {
+    const weekStart = getWeekStart();
+    const weekKey = weekStart.toISOString().split('T')[0];
+    const today = getWeekDay();
+    
+    const weeklyStats = getWeeklyStats();
+    
+    // Обновляем только сегодняшний день - используем проверку через if
+    if (today === 'Пн') weeklyStats.Пн = currentScore;
+    else if (today === 'Вт') weeklyStats.Вт = currentScore;
+    else if (today === 'Ср') weeklyStats.Ср = currentScore;
+    else if (today === 'Чт') weeklyStats.Чт = currentScore;
+    else if (today === 'Пт') weeklyStats.Пт = currentScore;
+    else if (today === 'Сб') weeklyStats.Сб = currentScore;
+    else if (today === 'Вс') weeklyStats.Вс = currentScore;
+    
+    weeklyStats.weekKey = weekKey;
+    
+    // Обновляем общий счет за неделю
+    const days: WeekDay[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    weeklyStats.totalScore = days.reduce((sum, day) => sum + (weeklyStats[day] || 0), 0);
+    
+    localStorage.setItem(`weeklyStats_${weekKey}`, JSON.stringify(weeklyStats));
+    console.log('Saved weekly stats:', weeklyStats);
+  };
+
+  // Функция для получения текущей недельной статистики для компонентов
+  const getCurrentWeeklyStats = (): Omit<WeeklyStatsType, 'weekKey' | 'totalScore'> => {
+    const { weekKey, totalScore, ...stats } = getWeeklyStats();
+    return stats;
   };
 
   const initGame = async (telegramUserId: number, telegramChatId?: number) => {
@@ -234,6 +313,8 @@ export const useGameStore = defineStore('game', () => {
     // Getters
     accuracy,
     totalQuestions,
+
+    getCurrentWeeklyStats,
     
     // Actions
     initGame,

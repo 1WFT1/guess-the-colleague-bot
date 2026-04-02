@@ -85,34 +85,27 @@ const emit = defineEmits<{
 
 // Реальная недельная статистика из localStorage
 const weeklyStats = computed(() => {
-  const saved = localStorage.getItem('weeklyStats');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to parse weekly stats', e);
-    }
+  // Проверяем, существует ли функция
+  if (gameStore.getCurrentWeeklyStats && typeof gameStore.getCurrentWeeklyStats === 'function') {
+    const stats = gameStore.getCurrentWeeklyStats();
+    return stats || {
+      'Пн': 0, 'Вт': 0, 'Ср': 0, 'Чт': 0, 'Пт': 0, 'Сб': 0, 'Вс': 0
+    };
   }
-  
-  const today = new Date().getDay();
-  const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-  const stats: Record<string, number> = {};
-  days.forEach(day => {
-    stats[day] = 0;
-  });
-  const todayName = days[today];
-  stats[todayName] = gameStore.score;
-  
-  return stats;
+  return {
+    'Пн': 0, 'Вт': 0, 'Ср': 0, 'Чт': 0, 'Пт': 0, 'Сб': 0, 'Вс': 0
+  };
 });
 
 const maxScore = computed(() => {
-  const scores = Object.values(weeklyStats.value);
+  const scores = Object.values(weeklyStats.value) as number[];
+  if (scores.length === 0) return 1;
   return Math.max(...scores, 1);
 });
 
 const getBarHeight = (score: number) => {
   if (score === 0) return 10;
+  if (maxScore.value === 0) return 5;
   return (score / maxScore.value) * 100;
 };
 
