@@ -17,7 +17,7 @@ import java.util.UUID;
 /**
  * Контроллер для управления сотрудниками
  * Доступен по адресу: /api/employees
- * Используется в админ-панели
+ * Используется в админ-панели для CRUD операций
  */
 @RestController
 @RequestMapping("/api/employees")
@@ -49,7 +49,7 @@ public class EmployeeController {
      * Получает список всех активных сотрудников
      * GET /api/employees
      *
-     * @return список сотрудников
+     * @return список всех активных сотрудников
      */
     @Operation(summary = "Получить всех активных сотрудников")
     @GetMapping
@@ -74,5 +74,77 @@ public class EmployeeController {
                 .findFirst()
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Создает нового сотрудника
+     * POST /api/employees
+     *
+     * @param employee данные нового сотрудника (fullName, department, photoUrl, isActive)
+     * @return созданный сотрудник с присвоенным ID
+     */
+    @Operation(summary = "Создать нового сотрудника")
+    @PostMapping
+    public ResponseEntity<Employee> createEmployee(@RequestBody Employee employee) {
+        return ResponseEntity.ok(employeeService.saveEmployee(employee));
+    }
+
+    /**
+     * Обновляет данные существующего сотрудника
+     * PUT /api/employees/{id}
+     *
+     * @param id ID сотрудника для обновления
+     * @param employee новые данные сотрудника
+     * @return обновленный сотрудник
+     */
+    @Operation(summary = "Обновить сотрудника")
+    @PutMapping("/{id}")
+    public ResponseEntity<Employee> updateEmployee(
+            @Parameter(description = "ID сотрудника", required = true)
+            @PathVariable UUID id,
+            @RequestBody Employee employee) {
+        employee.setId(id);  // Устанавливаем ID из пути
+        return ResponseEntity.ok(employeeService.saveEmployee(employee));
+    }
+
+    /**
+     * Удаляет сотрудника (мягкое удаление, установка isActive = false)
+     * DELETE /api/employees/{id}
+     *
+     * @param id ID сотрудника для удаления
+     * @return пустой ответ с кодом 200
+     */
+    @Operation(summary = "Удалить сотрудника")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEmployee(
+            @Parameter(description = "ID сотрудника", required = true)
+            @PathVariable UUID id) {
+        employeeService.deleteEmployee(id);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Переключает статус активности сотрудника
+     * PATCH /api/employees/{id}/active
+     *
+     * @param id ID сотрудника
+     * @param body тело запроса с полем isActive (true/false)
+     * @return обновленный сотрудник
+     */
+    @Operation(summary = "Переключить статус активности сотрудника")
+    @PatchMapping("/{id}/active")
+    public ResponseEntity<Employee> toggleActive(
+            @Parameter(description = "ID сотрудника", required = true)
+            @PathVariable UUID id,
+            @RequestBody Map<String, Boolean> body) {
+        // Находим сотрудника
+        Employee employee = employeeService.getAllActiveEmployees().stream()
+                .filter(e -> e.getId().equals(id))
+                .findFirst()
+                .orElseThrow();
+        // Устанавливаем новый статус активности
+        employee.setActive(body.get("isActive"));
+        // Сохраняем изменения
+        return ResponseEntity.ok(employeeService.saveEmployee(employee));
     }
 }
