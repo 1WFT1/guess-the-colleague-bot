@@ -30,10 +30,9 @@ public class EmployeeService {
      */
     @Cacheable(value = "employees", key = "'active'")
     public List<Employee> getAllActiveEmployees() {
-        log.info("Loading active employees from database");
-        List<Employee> employees = employeeRepository.findByIsActiveTrue();
-        log.info("Found {} active employees", employees.size());
-        return employees;
+        log.info("Loading ALL employees from database (temporary for admin)");
+        // Временно возвращаем всех, чтобы админ видел всех
+        return employeeRepository.findAll();
     }
 
     /**
@@ -84,6 +83,13 @@ public class EmployeeService {
         List<Employee> selected = candidates.subList(0, count);
         log.info("Selected {} employees", selected.size());
         return selected;
+    }
+
+    /**
+     * Получает сотрудника по ID
+     */
+    public Employee getEmployeeById(UUID id) {
+        return employeeRepository.findById(id).orElse(null);
     }
 
     /**

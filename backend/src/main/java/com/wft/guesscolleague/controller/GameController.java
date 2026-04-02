@@ -24,7 +24,6 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/game")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Tag(name = "Game Controller", description = "API для управления игровым процессом")
 public class GameController {

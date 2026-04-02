@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/leaderboard")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class LeaderboardController {
 
