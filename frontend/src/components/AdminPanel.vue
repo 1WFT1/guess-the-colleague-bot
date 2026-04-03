@@ -186,6 +186,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
+import { useGameStore } from '../stores/game';
 
 const API_URL = 'http://localhost:8080/api';
 
@@ -276,8 +277,59 @@ const totalPages = computed(() => {
 
 // Обновление статистики
 const updateStats = () => {
+  // Количество сотрудников
   gameStats.value.totalPlayers = employees.value.length;
-  gameStats.value.activeToday = employees.value.filter(e => e.isActive).length;
+  
+  // Количество активных сегодня (из localStorage)
+  const today = new Date().toISOString().split('T')[0];
+  const todayStats = localStorage.getItem(`dailyStats_${today}`);
+  if (todayStats) {
+    try {
+      const stats = JSON.parse(todayStats);
+      gameStats.value.activeToday = stats.activeUsers || 0;
+    } catch (e) {
+      gameStats.value.activeToday = 0;
+    }
+  } else {
+    gameStats.value.activeToday = 0;
+  }
+  
+  // Всего вопросов из GameStore
+  const gameStore = useGameStore();
+  gameStats.value.totalQuestions = gameStore.totalQuestions;
+  
+  // Реальный средний балл из всех игроков
+  let totalScore = 0;
+  let playersCount = 0;
+  
+  // Собираем статистику всех игроков
+  const allPlayersStats = localStorage.getItem('allPlayersStats');
+  if (allPlayersStats) {
+    try {
+      const players = JSON.parse(allPlayersStats);
+      players.forEach((player: any) => {
+        totalScore += player.totalScore || 0;
+        playersCount++;
+      });
+    } catch (e) {
+      console.error('Failed to parse players stats', e);
+    }
+  }
+  
+  // Добавляем текущего игрока
+  const currentStats = localStorage.getItem('gameStats');
+  if (currentStats) {
+    try {
+      const stats = JSON.parse(currentStats);
+      totalScore += stats.score || 0;
+      playersCount++;
+    } catch (e) {
+      console.error('Failed to parse current stats', e);
+    }
+  }
+  
+  // Рассчитываем средний балл
+  gameStats.value.averageScore = playersCount > 0 ? Math.round(totalScore / playersCount) : 0;
 };
 
 // Открыть модалку добавления
@@ -413,6 +465,26 @@ const exportData = () => {
   a.click();
   URL.revokeObjectURL(url);
   alert('Данные экспортированы');
+};
+
+// В конце игры или при ответе на вопрос
+const saveDailyActivity = () => {
+  const today = new Date().toISOString().split('T')[0];
+  const dailyStats = localStorage.getItem(`dailyStats_${today}`);
+  
+  let stats: any = { activeUsers: 0, totalGames: 0 };
+  if (dailyStats) {
+    stats = JSON.parse(dailyStats);
+  }
+  
+  const userId = localStorage.getItem('currentUserId');
+  if (userId && !stats[`user_${userId}`]) {
+    stats.activeUsers++;
+    stats[`user_${userId}`] = true;
+  }
+  
+  stats.totalGames++;
+  localStorage.setItem(`dailyStats_${today}`, JSON.stringify(stats));
 };
 </script>
 

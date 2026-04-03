@@ -95,10 +95,43 @@ export const useGameStore = defineStore('game', () => {
     };
     localStorage.setItem('gameStats', JSON.stringify(stats));
     
-    // Сохраняем недельную статистику с текущим счетом
-    saveWeeklyStats(score.value);
+    // Обновляем общую статистику для админ-панели
+    updateGlobalStats();
     
-    console.log('Saved stats:', stats);
+    // Сохраняем недельную статистику
+    saveWeeklyStats(score.value);
+  };
+
+  const updateGlobalStats = () => {
+    // Получаем всех игроков
+    let allPlayers: any[] = [];
+    const savedPlayers = localStorage.getItem('allPlayersStats');
+    if (savedPlayers) {
+      allPlayers = JSON.parse(savedPlayers);
+    }
+    
+    // Обновляем или добавляем текущего игрока
+    const currentUserId = localStorage.getItem('currentUserId');
+    const currentStats = {
+      userId: currentUserId,
+      totalScore: score.value,
+      correctCount: correctCount.value,
+      wrongCount: wrongCount.value,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    const existingIndex = allPlayers.findIndex(p => p.userId === currentUserId);
+    if (existingIndex !== -1) {
+      allPlayers[existingIndex] = currentStats;
+    } else {
+      allPlayers.push(currentStats);
+    }
+    
+    localStorage.setItem('allPlayersStats', JSON.stringify(allPlayers));
+    
+    // Обновляем общее количество вопросов
+    const totalQuestions = correctCount.value + wrongCount.value;
+    localStorage.setItem('totalQuestions', String(totalQuestions));
   };
 
   interface WeeklyStatsType {
