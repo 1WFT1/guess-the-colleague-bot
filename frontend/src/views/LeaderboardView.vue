@@ -12,28 +12,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed } from 'vue';
+import { useGameStore } from '../stores/game';
 import Leaderboard from '../components/Leaderboard.vue';
 
-const currentUserId = ref(123456789);
+const gameStore = useGameStore();
 
-const leaderboardData = ref([
-  { userId: 1, fullName: 'Анна Иванова', totalScore: 1250, accuracy: 85, rank: 1 },
-  { userId: 2, fullName: 'Петр Сидоров', totalScore: 1120, accuracy: 78, rank: 2 },
-  { userId: 3, fullName: 'Елена Козлова', totalScore: 980, accuracy: 72, rank: 3 },
-]);
+// Исправление: преобразуем null в 0
+const currentUserId = computed(() => gameStore.userId ?? 0);
 
-const currentUserRank = ref({
-  rank: 24,
-  totalScore: 425,
-  toTop: 70
+// Реальные данные из localStorage
+const leaderboardData = computed(() => {
+  const allStats = localStorage.getItem('allPlayersStats');
+  if (allStats) {
+    try {
+      return JSON.parse(allStats);
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+});
+
+const currentUserRank = computed(() => {
+  return {
+    rank: 1,
+    totalScore: gameStore.score,
+    toTop: 0
+  };
 });
 </script>
 
 <style scoped>
 .leaderboard-view {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #000000;
   padding: 20px;
 }
 </style>

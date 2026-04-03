@@ -21,7 +21,6 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/employees")
-@CrossOrigin(origins = "*")  // Разрешает CORS запросы с фронтенда
 @RequiredArgsConstructor
 @Tag(name = "Employee Controller", description = "API для управления сотрудниками")
 public class EmployeeController {
@@ -131,20 +130,16 @@ public class EmployeeController {
      * @param body тело запроса с полем isActive (true/false)
      * @return обновленный сотрудник
      */
-    @Operation(summary = "Переключить статус активности сотрудника")
     @PatchMapping("/{id}/active")
-    public ResponseEntity<Employee> toggleActive(
-            @Parameter(description = "ID сотрудника", required = true)
-            @PathVariable UUID id,
-            @RequestBody Map<String, Boolean> body) {
-        // Находим сотрудника
-        Employee employee = employeeService.getAllActiveEmployees().stream()
-                .filter(e -> e.getId().equals(id))
-                .findFirst()
-                .orElseThrow();
-        // Устанавливаем новый статус активности
+    public ResponseEntity<Employee> toggleActive(@PathVariable UUID id, @RequestBody Map<String, Boolean> body) {
+        // Загружаем существующего сотрудника из БД
+        Employee employee = employeeService.getEmployeeById(id);
+        if (employee == null) {
+            return ResponseEntity.notFound().build();
+        }
+        // Меняем статус
         employee.setActive(body.get("isActive"));
-        // Сохраняем изменения
+        // Сохраняем
         return ResponseEntity.ok(employeeService.saveEmployee(employee));
     }
 }

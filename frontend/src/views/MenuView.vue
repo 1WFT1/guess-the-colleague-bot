@@ -14,29 +14,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';  // ← добавили computed
 import { useRouter } from 'vue-router';
+import { useGameStore } from '../stores/game';
 import MainMenu from '../components/MainMenu.vue';
 
-const demoUserStats = {
-  totalScore: 0,
-  accuracy: 0,
-  bestStreak: 0
-};
+const router = useRouter();
+const gameStore = useGameStore();
 
 const demoDailyChallenge = {
   text: 'Правильно угадай 10 коллег подряд',
   reward: 50
 };
-const router = useRouter();
+
 const userName = ref('');
 const isAdmin = ref(false);
-const userStats = ref({
-  totalScore: demoUserStats.totalScore,
-  accuracy: demoUserStats.accuracy,
-  bestStreak: demoUserStats.bestStreak
-});
 const dailyChallenge = ref(demoDailyChallenge);
+
+// Исправление: используем computed с gameStore
+const userStats = computed(() => ({
+  totalScore: gameStore.score,
+  accuracy: gameStore.accuracy,
+  bestStreak: gameStore.bestStreak
+}));
 
 const startGame = () => {
   router.push('/game');
@@ -75,7 +75,7 @@ onMounted(() => {
 <style scoped>
 .menu-view {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #000000;
   padding: 20px;
 }
 </style>

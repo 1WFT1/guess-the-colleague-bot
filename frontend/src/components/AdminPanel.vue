@@ -36,33 +36,35 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="employee in paginatedEmployees" :key="employee.id">
-                <td class="id-cell">{{ employee.id }}</td>
-                <td class="name-cell">{{ employee.fullName }}</td>
-                <td class="dept-cell">{{ employee.department }}</td>
-                <td class="photo-cell">
-                  <span v-if="employee.photoUrl" class="status-icon success">☑️</span>
-                  <span v-else class="status-icon error">❌</span>
-                </td>
-                <td class="active-cell">
-                  <label class="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      :checked="employee.isActive" 
-                      @change="toggleActive(employee.id)"
-                    />
-                    <span class="toggle-slider"></span>
-                  </label>
-                </td>
-                <td class="actions-cell">
-                  <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
-                    ✏️
-                  </button>
-                  <button @click="deleteEmployee(employee.id)" class="delete-btn" title="Удалить">
-                    🗑️
-                  </button>
-                </td>
-              </tr>
+            <tr v-for="employee in paginatedEmployees" :key="employee.id">
+              <td class="id-cell" :title="String(employee.id)">
+                {{ String(employee.id).substring(0, 8) }}...
+              </td>
+              <td class="name-cell">{{ employee.fullName }}</td>
+              <td class="dept-cell">{{ employee.department }}</td>
+              <td class="photo-cell">
+                <span v-if="employee.photoUrl" class="status-icon success">☑️</span>
+                <span v-else class="status-icon error">❌</span>
+              </td>
+              <td class="active-cell">
+                <label class="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    :checked="employee.isActive" 
+                    @change="toggleActive(employee.id)"
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </td>
+              <td class="actions-cell">
+                <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
+                  ✏️
+                </button>
+                <button @click="deleteEmployee(employee.id)" class="delete-btn" title="Удалить">
+                  🗑️
+                </button>
+              </td>
+            </tr>
             </tbody>
           </table>
         </div>
@@ -184,6 +186,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
+import { useGameStore } from '../stores/game';
 
 const API_URL = 'http://localhost:8080/api';
 
@@ -198,6 +201,8 @@ interface Employee {
   department: string;
   photoUrl: string;
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Интерфейс формы
@@ -249,27 +254,82 @@ onMounted(() => {
 });
 
 const loadEmployees = async () => {
-  loading.value = true;
   try {
-    const response = await axios.get(`${API_URL}/employees`);
-    employees.value = response.data;
+    const response = await axios.get('http://localhost:8080/api/employees');
+    // Преобразуем поле active с сервера в isActive для компонента
+    employees.value = response.data.map((emp: any) => ({
+      id: emp.id,
+      fullName: emp.fullName,
+      department: emp.department,
+      photoUrl: emp.photoUrl,
+      isActive: emp.active,  // active с сервера → isActive в компоненте
+      createdAt: emp.createdAt,
+      updatedAt: emp.updatedAt
+    }));
     updateStats();
   } catch (error) {
     console.error('Ошибка загрузки сотрудников:', error);
-    alert('Не удалось загрузить список сотрудников');
-  } finally {
-    loading.value = false;
   }
 };
-
 const totalPages = computed(() => {
   return Math.ceil(employees.value.length / itemsPerPage);
 });
 
 // Обновление статистики
 const updateStats = () => {
+  // Количество сотрудников
   gameStats.value.totalPlayers = employees.value.length;
-  gameStats.value.activeToday = employees.value.filter(e => e.isActive).length;
+  
+  // Количество активных сегодня (из localStorage)
+  const today = new Date().toISOString().split('T')[0];
+  const todayStats = localStorage.getItem(`dailyStats_${today}`);
+  if (todayStats) {
+    try {
+      const stats = JSON.parse(todayStats);
+      gameStats.value.activeToday = stats.activeUsers || 0;
+    } catch (e) {
+      gameStats.value.activeToday = 0;
+    }
+  } else {
+    gameStats.value.activeToday = 0;
+  }
+  
+  // Всего вопросов из GameStore
+  const gameStore = useGameStore();
+  gameStats.value.totalQuestions = gameStore.totalQuestions;
+  
+  // Реальный средний балл из всех игроков
+  let totalScore = 0;
+  let playersCount = 0;
+  
+  // Собираем статистику всех игроков
+  const allPlayersStats = localStorage.getItem('allPlayersStats');
+  if (allPlayersStats) {
+    try {
+      const players = JSON.parse(allPlayersStats);
+      players.forEach((player: any) => {
+        totalScore += player.totalScore || 0;
+        playersCount++;
+      });
+    } catch (e) {
+      console.error('Failed to parse players stats', e);
+    }
+  }
+  
+  // Добавляем текущего игрока
+  const currentStats = localStorage.getItem('gameStats');
+  if (currentStats) {
+    try {
+      const stats = JSON.parse(currentStats);
+      totalScore += stats.score || 0;
+      playersCount++;
+    } catch (e) {
+      console.error('Failed to parse current stats', e);
+    }
+  }
+  
+  // Рассчитываем средний балл
+  gameStats.value.averageScore = playersCount > 0 ? Math.round(totalScore / playersCount) : 0;
 };
 
 // Открыть модалку добавления
@@ -359,10 +419,12 @@ const toggleActive = async (id: number) => {
   const employee = employees.value.find(e => e.id === id);
   if (employee) {
     try {
-      await axios.patch(`${API_URL}/employees/${id}/active`, {
-        isActive: !employee.isActive
+      const newStatus = !employee.isActive;
+      await axios.patch(`http://localhost:8080/api/employees/${id}/active`, {
+        isActive: newStatus
       });
-      await loadEmployees();
+      employee.isActive = newStatus;
+      updateStats();
     } catch (error) {
       console.error('Ошибка изменения статуса:', error);
       alert('Ошибка при изменении статуса');
@@ -371,11 +433,11 @@ const toggleActive = async (id: number) => {
 };
 
 
-
 // Обработка ошибки загрузки фото
 const handleImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
-  img.src = 'https://via.placeholder.com/100x100/2a2a2a/4f4ff4?text=No+Photo';
+  // Используем data:image вместо внешнего URL
+  img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%232a2a2a"/%3E%3Ctext x="50" y="55" text-anchor="middle" fill="%234f4ff4" font-size="40"%3E📷%3C/text%3E%3C/svg%3E';
 };
 
 // Пагинация
@@ -403,6 +465,26 @@ const exportData = () => {
   a.click();
   URL.revokeObjectURL(url);
   alert('Данные экспортированы');
+};
+
+// В конце игры или при ответе на вопрос
+const saveDailyActivity = () => {
+  const today = new Date().toISOString().split('T')[0];
+  const dailyStats = localStorage.getItem(`dailyStats_${today}`);
+  
+  let stats: any = { activeUsers: 0, totalGames: 0 };
+  if (dailyStats) {
+    stats = JSON.parse(dailyStats);
+  }
+  
+  const userId = localStorage.getItem('currentUserId');
+  if (userId && !stats[`user_${userId}`]) {
+    stats.activeUsers++;
+    stats[`user_${userId}`] = true;
+  }
+  
+  stats.totalGames++;
+  localStorage.setItem(`dailyStats_${today}`, JSON.stringify(stats));
 };
 </script>
 
@@ -526,6 +608,7 @@ const exportData = () => {
   width: 100%;
   border-collapse: collapse;
   background: #1a1a1a;
+  table-layout: fixed;
 }
 
 .employees-table th,
@@ -555,17 +638,21 @@ const exportData = () => {
 .id-cell {
   font-weight: 500;
   color: #4f4ff4;
+  width: 100px
 }
 
 .name-cell {
   font-weight: 500;
+  width: 150px
 }
 
 .photo-cell {
+  width: 60px;
   text-align: center;
 }
 
 .active-cell {
+  width: 80px;
   text-align: center;
 }
 
@@ -628,8 +715,9 @@ input:checked + .toggle-slider:before {
 }
 
 .actions-cell {
-  display: flex;
-  gap: 10px;
+  width: 90px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .edit-btn, .delete-btn {
@@ -637,9 +725,14 @@ input:checked + .toggle-slider:before {
   border: none;
   font-size: 18px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: 6px;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
 }
 
 .edit-btn {
