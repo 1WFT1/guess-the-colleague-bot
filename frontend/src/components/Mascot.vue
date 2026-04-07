@@ -2,7 +2,7 @@
   <div class="mascot">
     <div class="mascot-image-container">
       <img 
-        :src="getMascotImage()" 
+        :src="currentImage" 
         :alt="mood"
         class="mascot-image"
         :class="{ animated: isAnimated }"
@@ -16,24 +16,30 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+// Импортируем картинки из папки assets
+import happyImage from '../assets/images/codic-happy.png';
+import sadImage from '../assets/images/codic-sad.png';
+import thinkingImage from '../assets/images/codic-thinking.png';
+import neutralImage from '../assets/images/codic-shows.png';
+
 const props = defineProps<{
   mood?: 'happy' | 'sad' | 'thinking' | 'neutral';
   message?: string;
   animated?: boolean;
 }>();
 
-const isAnimated = computed(() => props.animated !== false);
+const currentImage = computed(() => {
+  switch (props.mood) {
+    case 'happy': return happyImage;
+    case 'sad': return sadImage;
+    case 'thinking': return thinkingImage;
+    default: return neutralImage;
+  }
+});
 
-const getMascotImage = () => {
-  // Используем изображения из public папки
-  const images: Record<string, string> = {
-    happy: '/images/codic-happy.png',
-    sad: '/images/codic-sad.png',
-    thinking: '/images/codic-thinking.png',
-    neutral: '/images/codic-shows.png'
-  };
-  return images[props.mood || 'neutral'];
-};
+const isAnimated = computed(() => {
+  return props.animated !== false;
+});
 
 const handleImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
@@ -86,8 +92,12 @@ const getFallbackEmoji = () => {
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .mascot-message {
@@ -103,7 +113,11 @@ const getFallbackEmoji = () => {
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 </style>
