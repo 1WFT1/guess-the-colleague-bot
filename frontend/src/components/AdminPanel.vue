@@ -1,3 +1,4 @@
+<!-- components/AdminPanel.vue -->
 <template>
   <div class="admin-panel">
     <div class="admin-header">
@@ -36,35 +37,35 @@
               </tr>
             </thead>
             <tbody>
-            <tr v-for="employee in paginatedEmployees" :key="employee.id">
-              <td class="id-cell" :title="String(employee.id)">
-                {{ String(employee.id).substring(0, 8) }}...
-              </td>
-              <td class="name-cell">{{ employee.fullName }}</td>
-              <td class="dept-cell">{{ employee.department }}</td>
-              <td class="photo-cell">
-                <span v-if="employee.photoUrl" class="status-icon success">☑️</span>
-                <span v-else class="status-icon error">❌</span>
-              </td>
-              <td class="active-cell">
-                <label class="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    :checked="employee.isActive" 
-                    @change="toggleActive(employee.id)"
-                  />
-                  <span class="toggle-slider"></span>
-                </label>
-              </td>
-              <td class="actions-cell">
-                <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
-                  ✏️
-                </button>
-                <button @click="deleteEmployee(employee.id)" class="delete-btn" title="Удалить">
-                  🗑️
-                </button>
-              </td>
-            </tr>
+              <tr v-for="employee in paginatedEmployees" :key="employee.id">
+                <td class="id-cell" :title="String(employee.id)">
+                  {{ formatId(employee.id) }}
+                </td>
+                <td class="name-cell">{{ employee.fullName }}</td>
+                <td class="dept-cell">{{ employee.department }}</td>
+                <td class="photo-cell">
+                  <span v-if="employee.photoUrl" class="status-icon success">☑️</span>
+                  <span v-else class="status-icon error">❌</span>
+                </td>
+                <td class="active-cell">
+                  <label class="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      :checked="employee.isActive" 
+                      @change="toggleActive(employee.id)"
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </td>
+                <td class="actions-cell">
+                  <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
+                    ✏️
+                  </button>
+                  <button @click="deleteEmployee(employee.id)" class="delete-btn" title="Удалить">
+                    🗑️
+                  </button>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -94,29 +95,50 @@
       <div class="section">
         <div class="section-header">
           <h3>Статистика игры</h3>
+          <button @click="refreshStats" class="btn btn-secondary">
+            🔄 Обновить
+          </button>
         </div>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStats.totalPlayers }}</div>
-            <div class="stat-label">Всего игроков</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStats.activeToday }}</div>
-            <div class="stat-label">Активных сегодня</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStats.totalQuestions }}</div>
-            <div class="stat-label">Всего вопросов</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStats.averageScore }}</div>
-            <div class="stat-label">Средний балл</div>
-          </div>
+        
+        <div v-if="adminStats.isLoading.value" class="loading">
+          Загрузка статистики...
         </div>
+        
+        <div v-else class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value">{{ adminStats.stats.value.totalPlayers }}</div>
+              <div class="stat-label">Всего игроков</div>
+            </div>
+            
+            <div class="stat-card">
+              <div class="stat-value">{{ adminStats.stats.value.activeToday }}</div>
+              <div class="stat-label">Активных сегодня</div>
+            </div>
+            
+            <div class="stat-card">
+              <div class="stat-value">{{ adminStats.stats.value.totalQuestions }}</div>
+              <div class="stat-label">Всего вопросов</div>
+            </div>
+            
+            <div class="stat-card">
+              <div class="stat-value">{{ adminStats.stats.value.averageScore }}</div>
+              <div class="stat-label">Средний балл</div>
+            </div>
+            
+            <div class="stat-card">
+              <div class="stat-value">{{ adminStats.stats.value.totalGames }}</div>
+              <div class="stat-label">Всего игр</div>
+            </div>
+            
+            <div v-if="adminStats.stats.value.topPlayer" class="stat-card">
+              <div class="stat-value">{{ adminStats.stats.value.topPlayer.name }}</div>
+              <div class="stat-label">Лучший игрок ({{ adminStats.stats.value.topPlayer.score }} очков)</div>
+            </div>
+          </div>
       </div>
     </div>
 
-    <!-- Модальное окно добавления/редактирования сотрудника -->
+    <!-- Модальное окно -->
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content">
         <div class="modal-header">
@@ -185,56 +207,22 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import axios from 'axios';
-import { useGameStore } from '../stores/game';
+import { useEmployeesApi } from '../composables/useEmployeesApi';
+import { useAdminStats } from '../composables/useAdminStats';
+import type { Employee, EmployeeForm } from '../types/game';
 
-const API_URL = 'http://localhost:8080/api';
+const emit = defineEmits<{ close: [] }>();
 
-const emit = defineEmits<{
-  close: [];
-}>();
+const employeesApi = useEmployeesApi();
+const adminStats = useAdminStats();
 
-// Интерфейс сотрудника
-interface Employee {
-  id: number;
-  fullName: string;
-  department: string;
-  photoUrl: string;
-  isActive: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-// Интерфейс формы
-interface EmployeeForm {
-  fullName: string;
-  department: string;
-  photoUrl: string;
-  isActive: boolean;
-}
-
-// Начальные данные сотрудников
 const employees = ref<Employee[]>([]);
-const loading = ref(false);
-
-// Реактивные данные
 const currentPage = ref(1);
 const itemsPerPage = 5;
-
-// Статистика игры
-const gameStats = ref({
-  totalPlayers: employees.value.length,
-  activeToday: employees.value.filter(e => e.isActive).length,
-  totalQuestions: 3452,
-  averageScore: 234
-});
-
-// Модальное окно
 const showModal = ref(false);
 const isEditing = ref(false);
 const editingId = ref<number | null>(null);
 
-// Форма
 const formData = ref<EmployeeForm>({
   fullName: '',
   department: '',
@@ -242,97 +230,65 @@ const formData = ref<EmployeeForm>({
   isActive: true
 });
 
-// Пагинация
 const paginatedEmployees = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
   return employees.value.slice(start, end);
 });
 
-onMounted(() => {
-  loadEmployees();
-});
+const totalPages = computed(() => Math.ceil(employees.value.length / itemsPerPage));
+
+const formatId = (id: number): string => {
+  return String(id).substring(0, 8) + '...';
+};
+
+const prevPage = () => {
+  if (currentPage.value > 1) currentPage.value--;
+};
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) currentPage.value++;
+};
 
 const loadEmployees = async () => {
-  try {
-    const response = await axios.get('http://localhost:8080/api/employees');
-    // Преобразуем поле active с сервера в isActive для компонента
-    employees.value = response.data.map((emp: any) => ({
-      id: emp.id,
-      fullName: emp.fullName,
-      department: emp.department,
-      photoUrl: emp.photoUrl,
-      isActive: emp.active,  // active с сервера → isActive в компоненте
-      createdAt: emp.createdAt,
-      updatedAt: emp.updatedAt
-    }));
-    updateStats();
-  } catch (error) {
-    console.error('Ошибка загрузки сотрудников:', error);
-  }
+  employees.value = await employeesApi.getAll();
+  cleanOldPlayerStats();
+  adminStats.updateFromEmployees(employees.value);
 };
-const totalPages = computed(() => {
-  return Math.ceil(employees.value.length / itemsPerPage);
-});
 
-// Обновление статистики
-const updateStats = () => {
-  // Количество сотрудников
-  gameStats.value.totalPlayers = employees.value.length;
+const refreshStats = () => {
+  cleanOldPlayerStats();
+  adminStats.refresh();
+};
+
+const cleanOldPlayerStats = () => {
+  const allPlayersKey = 'guess_colleague_all_players_v1';
+  const saved = localStorage.getItem(allPlayersKey);
   
-  // Количество активных сегодня (из localStorage)
-  const today = new Date().toISOString().split('T')[0];
-  const todayStats = localStorage.getItem(`dailyStats_${today}`);
-  if (todayStats) {
+  if (saved) {
     try {
-      const stats = JSON.parse(todayStats);
-      gameStats.value.activeToday = stats.activeUsers || 0;
-    } catch (e) {
-      gameStats.value.activeToday = 0;
-    }
-  } else {
-    gameStats.value.activeToday = 0;
-  }
-  
-  // Всего вопросов из GameStore
-  const gameStore = useGameStore();
-  gameStats.value.totalQuestions = gameStore.totalQuestions;
-  
-  // Реальный средний балл из всех игроков
-  let totalScore = 0;
-  let playersCount = 0;
-  
-  // Собираем статистику всех игроков
-  const allPlayersStats = localStorage.getItem('allPlayersStats');
-  if (allPlayersStats) {
-    try {
-      const players = JSON.parse(allPlayersStats);
-      players.forEach((player: any) => {
-        totalScore += player.totalScore || 0;
-        playersCount++;
+      const allPlayers = JSON.parse(saved);
+      // Оставляем только уникальных игроков (по userId)
+      const uniquePlayers = new Map();
+      allPlayers.forEach((player: any) => {
+        if (player.userId) {
+          // Если есть несколько записей одного игрока, берем последнюю
+          const existing = uniquePlayers.get(player.userId);
+          if (!existing || new Date(player.lastUpdated) > new Date(existing.lastUpdated)) {
+            uniquePlayers.set(player.userId, player);
+          }
+        }
       });
+      
+      const cleanedPlayers = Array.from(uniquePlayers.values());
+      localStorage.setItem(allPlayersKey, JSON.stringify(cleanedPlayers));
+      console.log(`Cleaned player stats: ${allPlayers.length} -> ${cleanedPlayers.length}`);
     } catch (e) {
-      console.error('Failed to parse players stats', e);
+      console.error('Failed to clean player stats:', e);
     }
   }
-  
-  // Добавляем текущего игрока
-  const currentStats = localStorage.getItem('gameStats');
-  if (currentStats) {
-    try {
-      const stats = JSON.parse(currentStats);
-      totalScore += stats.score || 0;
-      playersCount++;
-    } catch (e) {
-      console.error('Failed to parse current stats', e);
-    }
-  }
-  
-  // Рассчитываем средний балл
-  gameStats.value.averageScore = playersCount > 0 ? Math.round(totalScore / playersCount) : 0;
 };
 
-// Открыть модалку добавления
 const openAddModal = () => {
   isEditing.value = false;
   editingId.value = null;
@@ -345,7 +301,6 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
-// Открыть модалку редактирования
 const editEmployee = (employee: Employee) => {
   isEditing.value = true;
   editingId.value = employee.id;
@@ -358,14 +313,12 @@ const editEmployee = (employee: Employee) => {
   showModal.value = true;
 };
 
-// Закрыть модалку
 const closeModal = () => {
   showModal.value = false;
   isEditing.value = false;
   editingId.value = null;
 };
 
-// Сохранить сотрудника
 const saveEmployee = async () => {
   if (!formData.value.fullName.trim()) {
     alert('Введите ФИО сотрудника');
@@ -374,25 +327,13 @@ const saveEmployee = async () => {
   
   try {
     if (isEditing.value && editingId.value !== null) {
-      // Редактирование
-      await axios.put(`${API_URL}/employees/${editingId.value}`, {
-        fullName: formData.value.fullName,
-        department: formData.value.department,
-        photoUrl: formData.value.photoUrl,
-        isActive: formData.value.isActive
-      });
+      await employeesApi.update(editingId.value, formData.value);
       alert('Сотрудник обновлен');
     } else {
-      // Добавление
-      await axios.post(`${API_URL}/employees`, {
-        fullName: formData.value.fullName,
-        department: formData.value.department,
-        photoUrl: formData.value.photoUrl,
-        isActive: formData.value.isActive
-      });
+      await employeesApi.create(formData.value);
       alert('Сотрудник добавлен');
     }
-    await loadEmployees(); // Перезагружаем список
+    await loadEmployees();
     closeModal();
   } catch (error) {
     console.error('Ошибка сохранения:', error);
@@ -400,11 +341,10 @@ const saveEmployee = async () => {
   }
 };
 
-// Удалить сотрудника
 const deleteEmployee = async (id: number) => {
   if (confirm('Вы уверены, что хотите удалить этого сотрудника?')) {
     try {
-      await axios.delete(`${API_URL}/employees/${id}`);
+      await employeesApi.delete(id);
       await loadEmployees();
       alert('Сотрудник удален');
     } catch (error) {
@@ -414,17 +354,12 @@ const deleteEmployee = async (id: number) => {
   }
 };
 
-// Переключить статус активности
 const toggleActive = async (id: number) => {
   const employee = employees.value.find(e => e.id === id);
   if (employee) {
     try {
-      const newStatus = !employee.isActive;
-      await axios.patch(`http://localhost:8080/api/employees/${id}/active`, {
-        isActive: newStatus
-      });
-      employee.isActive = newStatus;
-      updateStats();
+      await employeesApi.toggleActive(id, !employee.isActive);
+      await loadEmployees();
     } catch (error) {
       console.error('Ошибка изменения статуса:', error);
       alert('Ошибка при изменении статуса');
@@ -432,29 +367,10 @@ const toggleActive = async (id: number) => {
   }
 };
 
-
-// Обработка ошибки загрузки фото
-const handleImageError = (event: Event) => {
-  const img = event.target as HTMLImageElement;
-  // Используем data:image вместо внешнего URL
-  img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%232a2a2a"/%3E%3Ctext x="50" y="55" text-anchor="middle" fill="%234f4ff4" font-size="40"%3E📷%3C/text%3E%3C/svg%3E';
-};
-
-// Пагинация
-const prevPage = () => {
-  if (currentPage.value > 1) currentPage.value--;
-};
-
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) currentPage.value++;
-};
-
-// Загрузка CSV
 const uploadCSV = () => {
   alert('Загрузка CSV файла');
 };
 
-// Экспорт данных
 const exportData = () => {
   const data = JSON.stringify(employees.value, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
@@ -464,31 +380,20 @@ const exportData = () => {
   a.download = `employees_${new Date().toISOString().split('T')[0]}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  alert('Данные экспортированы');
 };
 
-// В конце игры или при ответе на вопрос
-const saveDailyActivity = () => {
-  const today = new Date().toISOString().split('T')[0];
-  const dailyStats = localStorage.getItem(`dailyStats_${today}`);
-  
-  let stats: any = { activeUsers: 0, totalGames: 0 };
-  if (dailyStats) {
-    stats = JSON.parse(dailyStats);
-  }
-  
-  const userId = localStorage.getItem('currentUserId');
-  if (userId && !stats[`user_${userId}`]) {
-    stats.activeUsers++;
-    stats[`user_${userId}`] = true;
-  }
-  
-  stats.totalGames++;
-  localStorage.setItem(`dailyStats_${today}`, JSON.stringify(stats));
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%232a2a2a"/%3E%3Ctext x="50" y="55" text-anchor="middle" fill="%234f4ff4" font-size="40"%3E📷%3C/text%3E%3C/svg%3E';
 };
+
+onMounted(() => {
+  loadEmployees();
+});
 </script>
 
 <style scoped>
+/* Стили остаются те же, что и в оригинале */
 .admin-panel {
   background: #1a1a1a;
   border-radius: 30px;
@@ -500,14 +405,8 @@ const saveDailyActivity = () => {
 }
 
 @keyframes slideIn {
-  from {
-    transform: translateY(50px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .admin-header {
@@ -519,10 +418,7 @@ const saveDailyActivity = () => {
   color: white;
 }
 
-.admin-header h2 {
-  margin: 0;
-  font-size: 20px;
-}
+.admin-header h2 { margin: 0; font-size: 20px; }
 
 .close-btn {
   background: none;
@@ -533,17 +429,11 @@ const saveDailyActivity = () => {
   transition: transform 0.3s;
 }
 
-.close-btn:hover {
-  transform: rotate(90deg);
-}
+.close-btn:hover { transform: rotate(90deg); }
 
-.admin-content {
-  padding: 25px 30px;
-}
+.admin-content { padding: 25px 30px; }
 
-.section {
-  margin-bottom: 35px;
-}
+.section { margin-bottom: 35px; }
 
 .section-header {
   display: flex;
@@ -560,10 +450,7 @@ const saveDailyActivity = () => {
   font-size: 18px;
 }
 
-.actions {
-  display: flex;
-  gap: 12px;
-}
+.actions { display: flex; gap: 12px; }
 
 .btn {
   padding: 8px 18px;
@@ -608,7 +495,6 @@ const saveDailyActivity = () => {
   width: 100%;
   border-collapse: collapse;
   background: #1a1a1a;
-  table-layout: fixed;
 }
 
 .employees-table th,
@@ -623,52 +509,24 @@ const saveDailyActivity = () => {
   color: #e0e0e0;
   font-weight: 600;
   font-size: 13px;
-  letter-spacing: 0.5px;
 }
 
-.employees-table td {
-  color: #c0c0c0;
-  font-size: 14px;
-}
-
-.employees-table tr:hover td {
-  background: #252525;
-}
+.employees-table td { color: #c0c0c0; font-size: 14px; }
+.employees-table tr:hover td { background: #252525; }
 
 .id-cell {
   font-weight: 500;
   color: #4f4ff4;
-  width: 100px
+  width: 100px;
 }
 
-.name-cell {
-  font-weight: 500;
-  width: 150px
-}
+.name-cell { width: 150px; }
+.photo-cell { width: 60px; text-align: center; }
+.active-cell { width: 80px; text-align: center; }
 
-.photo-cell {
-  width: 60px;
-  text-align: center;
-}
+.status-icon.success { color: #4caf50; }
+.status-icon.error { color: #f44336; }
 
-.active-cell {
-  width: 80px;
-  text-align: center;
-}
-
-.status-icon {
-  font-size: 16px;
-}
-
-.status-icon.success {
-  color: #4caf50;
-}
-
-.status-icon.error {
-  color: #f44336;
-}
-
-/* Toggle switch */
 .toggle-switch {
   position: relative;
   display: inline-block;
@@ -706,13 +564,8 @@ const saveDailyActivity = () => {
   border-radius: 50%;
 }
 
-input:checked + .toggle-slider {
-  background-color: #4f4ff4;
-}
-
-input:checked + .toggle-slider:before {
-  transform: translateX(22px);
-}
+input:checked + .toggle-slider { background-color: #4f4ff4; }
+input:checked + .toggle-slider:before { transform: translateX(22px); }
 
 .actions-cell {
   width: 90px;
@@ -728,30 +581,14 @@ input:checked + .toggle-slider:before {
   padding: 6px 10px;
   border-radius: 6px;
   transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 32px;
   height: 32px;
 }
 
-.edit-btn {
-  color: #4caf50;
-}
-
-.edit-btn:hover {
-  background: rgba(76, 175, 80, 0.2);
-  transform: scale(1.1);
-}
-
-.delete-btn {
-  color: #f44336;
-}
-
-.delete-btn:hover {
-  background: rgba(244, 67, 54, 0.2);
-  transform: scale(1.1);
-}
+.edit-btn { color: #4caf50; }
+.edit-btn:hover { background: rgba(76, 175, 80, 0.2); transform: scale(1.1); }
+.delete-btn { color: #f44336; }
+.delete-btn:hover { background: rgba(244, 67, 54, 0.2); transform: scale(1.1); }
 
 .pagination {
   display: flex;
@@ -788,10 +625,9 @@ input:checked + .toggle-slider:before {
   font-size: 14px;
 }
 
-/* Статистика */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
@@ -819,6 +655,12 @@ input:checked + .toggle-slider:before {
   font-size: 12px;
   color: #888;
   margin-top: 8px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #888;
 }
 
 /* Модальное окно */
@@ -853,14 +695,8 @@ input:checked + .toggle-slider:before {
 }
 
 @keyframes slideUp {
-  from {
-    transform: translateY(30px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .modal-header {
@@ -874,10 +710,7 @@ input:checked + .toggle-slider:before {
   color: white;
 }
 
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-}
+.modal-header h3 { margin: 0; font-size: 18px; }
 
 .modal-close {
   background: none;
@@ -888,17 +721,11 @@ input:checked + .toggle-slider:before {
   transition: transform 0.2s;
 }
 
-.modal-close:hover {
-  transform: rotate(90deg);
-}
+.modal-close:hover { transform: rotate(90deg); }
 
-.modal-body {
-  padding: 20px;
-}
+.modal-body { padding: 20px; }
 
-.form-group {
-  margin-bottom: 20px;
-}
+.form-group { margin-bottom: 20px; }
 
 .form-group label {
   display: block;
@@ -939,9 +766,7 @@ input:checked + .toggle-slider:before {
   cursor: pointer;
 }
 
-.checkbox-label span {
-  color: #e0e0e0;
-}
+.checkbox-label span { color: #e0e0e0; }
 
 .photo-preview {
   margin-top: 15px;
@@ -989,9 +814,7 @@ input:checked + .toggle-slider:before {
   border: 1px solid #3a3a3a;
 }
 
-.btn-cancel:hover {
-  background: #3a3a3a;
-}
+.btn-cancel:hover { background: #3a3a3a; }
 
 .btn-save {
   background: #4f4ff4;
@@ -1003,36 +826,15 @@ input:checked + .toggle-slider:before {
   transform: translateY(-2px);
 }
 
-/* Адаптивность */
 @media (max-width: 768px) {
-  .admin-content {
-    padding: 20px;
-  }
+  .admin-content { padding: 20px; }
+  .section-header { flex-direction: column; align-items: stretch; }
+  .actions { justify-content: center; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
   
-  .section-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .actions {
-    justify-content: center;
-  }
-  
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-  }
-  
-  .employees-table th,
-  .employees-table td {
-    padding: 10px 12px;
-    font-size: 12px;
-  }
 }
 
 @media (max-width: 600px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
+  .stats-grid { grid-template-columns: 1fr; }
 }
 </style>

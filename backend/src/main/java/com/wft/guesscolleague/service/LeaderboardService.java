@@ -1,6 +1,7 @@
 package com.wft.guesscolleague.service;
 
 import com.wft.guesscolleague.dto.LeaderboardDTO;
+import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.model.WeeklyStats;
 import com.wft.guesscolleague.repository.WeeklyStatsRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class LeaderboardService {
 
     private final WeeklyStatsRepository weeklyStatsRepository;
+    private TelegramUserService telegramUserService;
 
     /**
      * Получает таблицу лидеров за указанную неделю
@@ -87,11 +89,8 @@ public class LeaderboardService {
      * @return имя пользователя
      */
     private String getUserFullName(Long userId) {
-        // Здесь нужно будет реализовать получение имени пользователя
-        // Варианты:
-        // 1. Через Telegram Bot API (getChat)
-        // 2. Из отдельной таблицы users в БД
-        // 3. Из кэша
-        return "User " + userId;  // Временно, пока не реализовано
+        return telegramUserService.getUserByTelegramId(userId)
+                .map(TelegramUser::getFullName)
+                .orElse("User " + userId);
     }
 }

@@ -1,45 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import gameApi from '../api/game';
-import type { Question, AnswerResponse } from '../types/game';
+import { saveTodayStats, loadCurrentWeekStats, getWeekKey, getWeekDay } from '../utils/weeklyStats';
+import type { Question, AnswerResponse, GameStats } from '../types/game';
 
 export const useGameStore = defineStore('game', () => {
-  type WeekDay = 'Пн' | 'Вт' | 'Ср' | 'Чт' | 'Пт' | 'Сб' | 'Вс';
-  const getWeekDay = (): WeekDay => {
-    const now = new Date();
-    const days: WeekDay[] = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    const dayIndex = now.getDay();
-    
-    // Используем утверждение типа, так как dayIndex всегда 0-6
-    return days[dayIndex] as WeekDay;
-  };
-
-  // Тип для недельной статистики
-  interface WeeklyStatsType {
-    Пн: number;
-    Вт: number;
-    Ср: number;
-    Чт: number;
-    Пт: number;
-    Сб: number;
-    Вс: number;
-    weekKey?: string;
-    totalScore?: number;
-  }
-
-  const getWeekStart = (): Date => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - diff);
-    monday.setHours(0, 0, 0, 0);
-    return monday;
-  };
-
-
-
-
   // State
   const sessionId = ref<string | null>(null);
   const userId = ref<number | null>(null);
@@ -48,7 +13,7 @@ export const useGameStore = defineStore('game', () => {
   const correctCount = ref(0);
   const wrongCount = ref(0);
   const isLoading = ref(false);
-  const feedback = ref<any>(null);
+  const feedback = ref<AnswerResponse | null>(null);
   const isGameActive = ref(true);
   const error = ref<string | null>(null);
   const currentStreak = ref(0);
@@ -63,29 +28,50 @@ export const useGameStore = defineStore('game', () => {
 
   const totalQuestions = computed(() => correctCount.value + wrongCount.value);
 
-  // Загрузка сохраненной статистики
-  const loadSavedStats = () => {
-    const savedStats = localStorage.getItem('gameStats');
+  // Private methods
+  const loadSavedStats = (): boolean => {
+    const savedUserId = localStorage.getItem('currentUserId');
+    const currentUserId = savedUserId || userId.value;
+    if (!currentUserId) return false;
+    
+    const key = `game_stats_${currentUserId}`;
+    const savedStats = localStorage.getItem(key);
+    
     if (savedStats) {
       try {
-        const stats = JSON.parse(savedStats);
-        score.value = stats.score || 0;
-        correctCount.value = stats.correctCount || 0;
-        wrongCount.value = stats.wrongCount || 0;
-        bestStreak.value = stats.bestStreak || 0;
-        currentStreak.value = stats.currentStreak || 0;
-        console.log('Loaded saved stats:', stats);
+        const stats: GameStats = JSON.parse(savedStats);
+        score.value = stats.score;
+        correctCount.value = stats.correctCount;
+        wrongCount.value = stats.wrongCount;
+        bestStreak.value = stats.bestStreak;
+        currentStreak.value = stats.currentStreak;
         return true;
       } catch (e) {
         console.error('Failed to load stats:', e);
       }
     }
+    
+    // Если нет сохраненной статистики, но есть недельная - восстановить
+    if (userId.value) {
+      const weeklyStats = loadCurrentWeekStats();
+      const today = getWeekDay();
+      const weeklyScore = weeklyStats[today] || 0;
+      
+      if (weeklyScore > 0) {
+        console.log('[loadSavedStats] No saved stats, restoring from weekly:', weeklyScore);
+        score.value = weeklyScore;
+        saveStats();
+        return true;
+      }
+    }
+    
     return false;
   };
 
-  // Сохранение статистики
   const saveStats = () => {
-    const stats = {
+    if (!userId.value) return;
+    
+    const stats: GameStats = {
       score: score.value,
       correctCount: correctCount.value,
       wrongCount: wrongCount.value,
@@ -93,137 +79,107 @@ export const useGameStore = defineStore('game', () => {
       currentStreak: currentStreak.value,
       lastUpdated: new Date().toISOString()
     };
-    localStorage.setItem('gameStats', JSON.stringify(stats));
     
-    // Обновляем общую статистику для админ-панели
-    updateGlobalStats();
+    localStorage.setItem(`game_stats_${userId.value}`, JSON.stringify(stats));
+    localStorage.setItem('currentUserId', String(userId.value));
     
-    // Сохраняем недельную статистику
-    saveWeeklyStats(score.value);
+    // Используем единую функцию для сохранения недельной статистики
+    saveTodayStats(score.value);
+    
+    // Update global players list
+    updateGlobalPlayersList();
   };
 
-  const updateGlobalStats = () => {
-    // Получаем всех игроков
+  const updateGlobalPlayersList = () => {
+    const allPlayersKey = 'guess_colleague_all_players_v1';
     let allPlayers: any[] = [];
-    const savedPlayers = localStorage.getItem('allPlayersStats');
-    if (savedPlayers) {
-      allPlayers = JSON.parse(savedPlayers);
+    const saved = localStorage.getItem(allPlayersKey);
+    
+    if (saved) {
+      try {
+        allPlayers = JSON.parse(saved);
+      } catch (e) {}
     }
     
-    // Обновляем или добавляем текущего игрока
-    const currentUserId = localStorage.getItem('currentUserId');
-    const currentStats = {
-      userId: currentUserId,
+    const currentPlayer = {
+      userId: userId.value,
+      fullName: localStorage.getItem('userName') || `Игрок ${userId.value}`,
       totalScore: score.value,
       correctCount: correctCount.value,
       wrongCount: wrongCount.value,
+      accuracy: accuracy.value,
       lastUpdated: new Date().toISOString()
     };
     
-    const existingIndex = allPlayers.findIndex(p => p.userId === currentUserId);
+    const existingIndex = allPlayers.findIndex(p => p.userId === userId.value);
     if (existingIndex !== -1) {
-      allPlayers[existingIndex] = currentStats;
+      allPlayers[existingIndex] = currentPlayer;
     } else {
-      allPlayers.push(currentStats);
+      allPlayers.push(currentPlayer);
     }
     
-    localStorage.setItem('allPlayersStats', JSON.stringify(allPlayers));
-    
-    // Обновляем общее количество вопросов
-    const totalQuestions = correctCount.value + wrongCount.value;
-    localStorage.setItem('totalQuestions', String(totalQuestions));
+    localStorage.setItem(allPlayersKey, JSON.stringify(allPlayers));
   };
 
-  interface WeeklyStatsType {
-    Пн: number;
-    Вт: number;
-    Ср: number;
-    Чт: number;
-    Пт: number;
-    Сб: number;
-    Вс: number;
-    weekKey?: string;
-    totalScore?: number;
+  const updateStreak = (isCorrect: boolean) => {
+    if (isCorrect) {
+      currentStreak.value++;
+      if (currentStreak.value > bestStreak.value) {
+        bestStreak.value = currentStreak.value;
+      }
+    } else {
+      currentStreak.value = 0;
+    }
+  };
+
+  interface DailyStats {
+    activeUsers: number;
+    totalGames: number;
+    [key: string]: number | boolean;
   }
 
-  const getWeeklyStats = (): WeeklyStatsType => {
-    const weekStart = getWeekStart();
-    const weekKey = weekStart.toISOString().split('T')[0];
+  const recordDailyActivity = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const key = `daily_stats_${today}`;
     
-    const saved = localStorage.getItem(`weeklyStats_${weekKey}`);
-    if (saved) {
+    let dailyStats: DailyStats = { activeUsers: 0, totalGames: 0 };
+    const stored = localStorage.getItem(key);
+    
+    if (stored) {
       try {
-        const parsed = JSON.parse(saved);
-        return {
-          Пн: parsed.Пн ?? 0,
-          Вт: parsed.Вт ?? 0,
-          Ср: parsed.Ср ?? 0,
-          Чт: parsed.Чт ?? 0,
-          Пт: parsed.Пт ?? 0,
-          Сб: parsed.Сб ?? 0,
-          Вс: parsed.Вс ?? 0,
-          weekKey: weekKey,
-          totalScore: parsed.totalScore ?? 0
+        const parsed = JSON.parse(stored);
+        dailyStats = {
+          activeUsers: parsed.activeUsers || 0,
+          totalGames: parsed.totalGames || 0,
+          ...parsed
         };
-      } catch (e) {
-        console.error('Failed to parse weekly stats', e);
-      }
+      } catch (e) {}
     }
     
-    return {
-      Пн: 0, Вт: 0, Ср: 0, Чт: 0, Пт: 0, Сб: 0, Вс: 0,
-      weekKey: weekKey,
-      totalScore: 0
-    };
+    const userKey = `user_${userId.value}`;
+    if (!dailyStats[userKey]) {
+      dailyStats[userKey] = true;
+      dailyStats.activeUsers++;
+    }
+    
+    dailyStats.totalGames++;
+    localStorage.setItem(key, JSON.stringify(dailyStats));
+    
+    console.log('Daily activity recorded:', dailyStats);
   };
 
-  // Сохранение недельной статистики
-  const saveWeeklyStats = (currentScore: number): void => {
-    const weekStart = getWeekStart();
-    const weekKey = weekStart.toISOString().split('T')[0];
-    const today = getWeekDay();
-    
-    const weeklyStats = getWeeklyStats();
-    
-    // Обновляем только сегодняшний день - используем проверку через if
-    if (today === 'Пн') weeklyStats.Пн = currentScore;
-    else if (today === 'Вт') weeklyStats.Вт = currentScore;
-    else if (today === 'Ср') weeklyStats.Ср = currentScore;
-    else if (today === 'Чт') weeklyStats.Чт = currentScore;
-    else if (today === 'Пт') weeklyStats.Пт = currentScore;
-    else if (today === 'Сб') weeklyStats.Сб = currentScore;
-    else if (today === 'Вс') weeklyStats.Вс = currentScore;
-    
-    weeklyStats.weekKey = weekKey;
-    
-    // Обновляем общий счет за неделю
-    const days: WeekDay[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-    weeklyStats.totalScore = days.reduce((sum, day) => sum + (weeklyStats[day] || 0), 0);
-    
-    localStorage.setItem(`weeklyStats_${weekKey}`, JSON.stringify(weeklyStats));
-    console.log('Saved weekly stats:', weeklyStats);
-  };
-
-  // Функция для получения текущей недельной статистики для компонентов
-  const getCurrentWeeklyStats = (): Omit<WeeklyStatsType, 'weekKey' | 'totalScore'> => {
-    const { weekKey, totalScore, ...stats } = getWeeklyStats();
-    return stats;
-  };
-
+  // Public methods
   const initGame = async (telegramUserId: number, telegramChatId?: number) => {
     try {
       isLoading.value = true;
       error.value = null;
       userId.value = telegramUserId;
       
-      // Загружаем сохраненную статистику
       loadSavedStats();
-      console.log('Loaded stats on game init:', { score: score.value, correct: correctCount.value });
+      recordDailyActivity();
       
-      // Создаем новую сессию
       const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
       sessionId.value = id;
-      console.log('Session created:', id);
       
       await loadNextQuestion();
     } catch (err) {
@@ -244,7 +200,6 @@ export const useGameStore = defineStore('game', () => {
       
       const question = await gameApi.getNextQuestion(sessionId.value);
       currentQuestion.value = question;
-      console.log('New question loaded:', currentQuestion.value);
     } catch (err) {
       error.value = 'Не удалось загрузить вопрос. Попробуйте позже.';
       console.error('Load question error:', err);
@@ -254,14 +209,7 @@ export const useGameStore = defineStore('game', () => {
   };
 
   const submitAnswer = async (selectedIndex: number) => {
-    if (!sessionId.value || !currentQuestion.value) {
-      console.error('No session or question');
-      return;
-    }
-
-    console.log('=== SUBMITTING ANSWER ===');
-    console.log('Selected index:', selectedIndex);
-    console.log('Selected option:', currentQuestion.value.options[selectedIndex]);
+    if (!sessionId.value || !currentQuestion.value) return;
 
     try {
       isLoading.value = true;
@@ -272,38 +220,21 @@ export const useGameStore = defineStore('game', () => {
         selectedIndex
       );
       
-      console.log('Answer result:', result);
-      
-      const isAnswerCorrect = result.correct === true;
-      
-      // Обновляем счет
+      // Update game state
       score.value = result.newTotalScore;
+      updateStreak(result.correct);
       
-      if (isAnswerCorrect) {
+      if (result.correct) {
         correctCount.value++;
-        currentStreak.value++;
-        if (currentStreak.value > bestStreak.value) {
-          bestStreak.value = currentStreak.value;
-        }
-        console.log('✅ Correct answer! Streak:', currentStreak.value);
       } else {
         wrongCount.value++;
-        currentStreak.value = 0;
-        console.log('❌ Wrong answer. Correct is:', result.correctAnswer);
       }
       
-      // Сохраняем статистику
       saveStats();
       
-      feedback.value = {
-        isCorrect: isAnswerCorrect,
-        pointsDelta: result.pointsDelta,
-        newTotalScore: result.newTotalScore,
-        correctAnswer: result.correctAnswer,
-        message: result.message
-      };
+      feedback.value = result;
       
-      // Загружаем следующий вопрос через 2 секунды
+      // Load next question after delay
       setTimeout(() => {
         loadNextQuestion();
       }, 2000);
@@ -322,11 +253,46 @@ export const useGameStore = defineStore('game', () => {
     feedback.value = null;
     error.value = null;
     isGameActive.value = true;
-    console.log('Game reset, stats preserved:', { score: score.value, correct: correctCount.value });
   };
 
-  // Загружаем статистику при создании стора
-  loadSavedStats();
+  const resetStats = () => {
+    // Обнуляем все счета
+    score.value = 0;
+    correctCount.value = 0;
+    wrongCount.value = 0;
+    currentStreak.value = 0;
+    bestStreak.value = 0;
+    
+    // Сохраняем обнуленную статистику
+    saveStats();
+    
+    // Обнуляем недельную статистику за сегодня
+    const today = getWeekDay();
+    const weekKey = getWeekKey();
+    const existingStats = localStorage.getItem(weekKey);
+    
+    if (existingStats) {
+      try {
+        const stats = JSON.parse(existingStats);
+        stats[today] = 0;
+        
+        // Пересчитываем totalScore
+        const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+        stats.totalScore = days.reduce((sum: number, day: string) => sum + (stats[day] || 0), 0);
+        
+        localStorage.setItem(weekKey, JSON.stringify(stats));
+        console.log(`[Reset] Weekly stats cleared for ${today}`);
+      } catch (e) {
+        console.error('[Reset] Failed to clear weekly stats:', e);
+      }
+    }
+    
+    console.log('[Reset] All game stats reset to zero');
+  };
+
+  const getCurrentWeeklyStats = () => {
+    return loadCurrentWeekStats();
+  };
 
   return {
     // State
@@ -346,14 +312,14 @@ export const useGameStore = defineStore('game', () => {
     // Getters
     accuracy,
     totalQuestions,
-
-    getCurrentWeeklyStats,
     
-    // Actions
+    // Methods
     initGame,
     loadNextQuestion,
     submitAnswer,
     resetGame,
+    resetStats,
     loadSavedStats,
+    getCurrentWeeklyStats
   };
 });
