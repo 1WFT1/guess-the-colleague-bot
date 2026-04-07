@@ -5,7 +5,7 @@
     <div class="stats-header">
       <div class="stat-card score-card">
         <div class="stat-icon">
-          <img src="/src/assets/images/score_icon.png" alt="Очки" class="stat-icon-img" />
+          <img src="/images/score_icon.png" alt="Очки" class="stat-icon-img" />
         </div>
         <div class="stat-content">
           <div class="stat-label">ОЧКИ</div>
@@ -648,4 +648,5 @@ onUnmounted(() => {
   .stats-header { gap: 8px; padding: 12px; }
   .stat-value { font-size: 16px; }
 }
+
 </style>
