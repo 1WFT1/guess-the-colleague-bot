@@ -17,10 +17,10 @@
 import { computed } from 'vue';
 
 // Импортируем картинки из папки assets
-import happyImage from '../assets/images/codic-happy.png';
-import sadImage from '../assets/images/codic-sad.png';
-import thinkingImage from '../assets/images/codic-thinking.png';
-import neutralImage from '../assets/images/codic-shows.png';
+import happyImage from '@/assets/images/codic-happy.png';
+import sadImage from '@/assets/images/codic-sad.png';
+import thinkingImage from '@/assets/images/codic-thinking.png';
+import neutralImage from '@/assets/images/codic-shows.png';
 
 const props = defineProps<{
   mood?: 'happy' | 'sad' | 'thinking' | 'neutral';
