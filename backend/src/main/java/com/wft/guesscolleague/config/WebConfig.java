@@ -10,9 +10,15 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOriginPatterns("http://localhost:*")  // используем allowedOriginPatterns вместо allowedOrigins
+                .allowedOriginPatterns(
+                        "http://localhost:*",           // Локальная разработка
+                        "guess-the-colleague-e286h2ibb-1wft1s-projects.vercel.app",  // Ваш Vercel домен
+                        "https://*.vercel.app",          // Все Vercel поддомены
+                        "https://*.serveousercontent.com" // Serveo туннель
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true);
+                .allowCredentials(true)
+                .maxAge(3600);  // Кэширование CORS preflight на 1 час
     }
 }
