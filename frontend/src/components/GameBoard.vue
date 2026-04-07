@@ -5,7 +5,7 @@
     <div class="stats-header">
       <div class="stat-card score-card">
         <div class="stat-icon">
-          <img src="/images/score_icon.png" alt="Очки" class="stat-icon-img" />
+          <span class="stat-icon-emoji">⭐</span>
         </div>
         <div class="stat-content">
           <div class="stat-label">ОЧКИ</div>
