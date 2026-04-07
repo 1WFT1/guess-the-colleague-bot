@@ -392,33 +392,4 @@ onMounted(() => {
     transform: translateY(0);
   }
 }
-
-/* Адаптивность */
-@media (max-width: 500px) {
-  .game-view {
-    padding: 10px;
-  }
-  
-  .simple-menu {
-    padding: 25px 20px;
-  }
-  
-  .simple-title {
-    font-size: 24px;
-  }
-  
-  .preview-value {
-    font-size: 20px;
-  }
-  
-  .simple-btn {
-    padding: 12px 20px;
-    font-size: 14px;
-  }
-  
-  .mascot-image {
-    width: 120px;
-    height: 120px;
-  }
-}
 </style>
