@@ -41,7 +41,7 @@
           
           <div class="simple-mascot">
             <img 
-              src="assets/images/codic_start.png" 
+              src="/assets/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
               @error="handleImageError"
