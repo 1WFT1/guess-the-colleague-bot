@@ -40,12 +40,12 @@
           </div>
           
           <div class="simple-mascot">
-                <img 
-                :src="codicStartImage" 
-                alt="Маскот" 
-                class="mascot-image"
-                @error="handleImageError"
-              />
+            <img 
+              src="assets/images/codic_start.png" 
+              alt="Маскот" 
+              class="mascot-image"
+              @error="handleImageError"
+            />
             <div class="mascot-message">{{ mascotMessage }}</div>
           </div>
         </div>
@@ -95,7 +95,6 @@ import GameBoard from '../components/GameBoard.vue';
 import Leaderboard from '../components/Leaderboard.vue';
 import PlayerStats from '../components/PlayerStats.vue';
 import AdminPanel from '../components/AdminPanel.vue';
-import codicStartImage from '@/assets/images/codic_start.png';
 
 const gameStore = useGameStore();
 const { userId, isAdmin, userName } = useTelegram();

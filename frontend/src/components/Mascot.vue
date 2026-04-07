@@ -16,11 +16,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-// Импортируем картинки из папки assets
-import happyImage from '../assets/images/codic-happy.png';
-import sadImage from '../assets/images/codic-sad.png';
-import thinkingImage from '../assets/images/codic-thinking.png';
-import neutralImage from '../assets/images/codic-shows.png';
+const getImagePath = (imageName: string) => {
+  return `/assets/images/${imageName}`;
+};
 
 const props = defineProps<{
   mood?: 'happy' | 'sad' | 'thinking' | 'neutral';
@@ -30,10 +28,10 @@ const props = defineProps<{
 
 const currentImage = computed(() => {
   switch (props.mood) {
-    case 'happy': return happyImage;
-    case 'sad': return sadImage;
-    case 'thinking': return thinkingImage;
-    default: return neutralImage;
+    case 'happy': return getImagePath('codic-happy.png');
+    case 'sad': return getImagePath('codic-sad.png');
+    case 'thinking': return getImagePath('codic-thinking.png');
+    default: return getImagePath('codic-shows.png');
   }
 });
 
@@ -43,6 +41,7 @@ const isAnimated = computed(() => {
 
 const handleImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
+  console.warn(`Failed to load image: ${img.src}`);
   img.style.display = 'none';
   const parent = img.parentElement;
   if (parent) {
@@ -65,6 +64,7 @@ const getFallbackEmoji = () => {
 </script>
 
 <style scoped>
+/* Стили остаются без изменений */
 .mascot {
   text-align: center;
   margin-top: 10px;
