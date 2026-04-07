@@ -41,7 +41,7 @@
           
           <div class="simple-mascot">
             <img 
-              src="C:\Users\user\IdeaProjects\guess-the-colleague-bot\frontend\src\assets\images\codic_start.png" 
+              src="/src/assets/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
               @error="handleImageError"
