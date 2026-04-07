@@ -4,7 +4,7 @@
       <!-- Карточка очков -->
       <div class="stat-card score-card">
         <div class="stat-icon">
-          <img src="C:\Users\user\IdeaProjects\guess-the-colleague-bot\frontend\src\assets\images\score_icon.png" alt="Очки" class="stat-icon-img" />
+          <img src="/images/score_icon.png" alt="Очки" class="stat-icon-img" />
         </div>
         <div class="stat-content">
           <div class="stat-label">ОЧКИ</div>
