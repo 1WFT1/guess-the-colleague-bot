@@ -9,6 +9,7 @@ import com.wft.guesscolleague.dto.QuestionDTO;
 import com.wft.guesscolleague.model.Employee;
 import com.wft.guesscolleague.model.GameSession;
 import com.wft.guesscolleague.model.QuestionAttempt;
+import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.repository.GameSessionRepository;
 import com.wft.guesscolleague.repository.QuestionAttemptRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,37 +30,46 @@ import java.util.stream.Collectors;
 @Slf4j  // Lombok: логгер
 public class GameService {
 
-    private final EmployeeService employeeService;        // Сервис сотрудников
-    private final GameSessionRepository sessionRepository;      // Репозиторий сессий
-    private final QuestionAttemptRepository attemptRepository;  // Репозиторий попыток
-    private final ObjectMapper objectMapper;                    // Для JSON сериализации
+    private final EmployeeService employeeService;
+    private final GameSessionRepository sessionRepository;
+    private final QuestionAttemptRepository attemptRepository;
+    private final ObjectMapper objectMapper;
+    private final TelegramUserService telegramUserService;  // Добавить
 
     /**
-     * Создает новую игровую сессию или возвращает существующую активную
-     * @param userId ID пользователя в Telegram
-     * @param chatId ID чата в Telegram
-     * @return созданная или существующая сессия
+     * Создает новую игровую сессию
      */
     @Transactional
     public GameSession createSession(Long userId, Long chatId) {
         log.info("Creating session for user: {}", userId);
 
-        // Проверяем, есть ли активная сессия у этого пользователя
-        Optional<GameSession> existingSession = sessionRepository.findByUserIdAndIsActiveTrue(userId);
-        if (existingSession.isPresent()) {
-            GameSession session = existingSession.get();
-            session.setLastActivity(LocalDateTime.now());  // Обновляем время последней активности
-            log.info("Using existing session: {}", session.getId());
-            return sessionRepository.save(session);
+        // Регистрируем пользователя (без данных, они придут с фронтенда)
+        telegramUserService.registerOrUpdateUser(userId);
+
+        // Увеличиваем счетчик игр
+        telegramUserService.incrementGamesPlayed(userId);
+
+        // Закрываем старые сессии
+        Optional<GameSession> oldSessionOpt = sessionRepository.findByUserIdAndIsActiveTrue(userId);
+        if (oldSessionOpt.isPresent()) {
+            GameSession old = oldSessionOpt.get();
+            old.setActive(false);
+            sessionRepository.save(old);
+            log.info("Closed old session: {}", old.getId());
         }
 
-        // Создаем новую сессию
+        // Создаем новую сессию с нулевыми очками
         GameSession session = new GameSession();
         session.setUserId(userId);
         session.setChatId(chatId);
         session.setLastActivity(LocalDateTime.now());
+        session.setTotalScore(0);
+        session.setCorrectAnswers(0);
+        session.setWrongAnswers(0);
+        session.setActive(true);
+
         GameSession saved = sessionRepository.save(session);
-        log.info("Created new session: {}", saved.getId());
+        log.info("Created new session: {} with score 0", saved.getId());
         return saved;
     }
 
@@ -186,7 +196,6 @@ public class GameService {
     @Transactional
     public AnswerResponse processAnswer(AnswerRequest request) {
         log.info("Processing answer for question: {}", request.getQuestionId());
-
         // Находим вопрос по ID
         QuestionAttempt attempt = attemptRepository.findById(request.getQuestionId())
                 .orElseThrow(() -> new IllegalArgumentException("Question attempt not found"));

@@ -1,3 +1,4 @@
+<!-- views/GameView.vue - полностью исправленная версия -->
 <template>
   <div class="game-view">
     <div class="game-container">
@@ -8,7 +9,6 @@
             <h1 class="simple-title">Угадай коллегу</h1>
           </div>
 
-          <!-- Отображение статистики в меню - всегда показываем, даже если 0 -->
           <div class="stats-preview">
             <div class="preview-card">
               <div class="preview-value">{{ gameStore.score }}</div>
@@ -26,7 +26,7 @@
           
           <div class="simple-buttons">
             <button @click="startGame" class="simple-btn primary">
-              Начать игру
+              🎮 Начать игру
             </button>
             <button @click="showLeaderboard" class="simple-btn">
               🏆 Лидерборд
@@ -41,172 +41,140 @@
           
           <div class="simple-mascot">
             <img 
-              src="C:\Users\user\IdeaProjects\guess-the-colleague-bot\frontend\src\assets\images\codic_start.png" 
+              src="/src/assets/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
               @error="handleImageError"
             />
-            <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
+            <div class="mascot-message">{{ mascotMessage }}</div>
           </div>
         </div>
       </div>
       
-      <!-- Остальные вьюхи без изменений -->
-      <div v-if="currentView === 'game'" class="game-wrapper">
-        <GameBoard 
-          :key="gameKey"
-          :userId="userId"
-          :chatId="chatId"
-          :gameMode="gameMode"
-          @back-to-menu="handleBackToMenu"
-        />
-      </div>
+      <!-- Игровое поле -->
+      <GameBoard 
+        v-if="currentView === 'game'"
+        :key="gameKey"
+        :userId="userId"
+        :chatId="chatId"
+        :gameMode="gameMode"
+        @back-to-menu="handleBackToMenu"
+      />
       
-      <div v-if="currentView === 'leaderboard'" class="leaderboard-wrapper">
-        <Leaderboard
-          :players="leaderboardData"
-          :currentUserId="userId"
-          :currentUserRank="currentUserRank"
-          @close="currentView = 'menu'"
-          @play="startGame"
-          @show-stats="showStats"
-        />
-      </div>
+      <!-- Лидерборд -->
+      <Leaderboard
+        v-if="currentView === 'leaderboard'"
+        :currentUserId="userId"
+        @close="currentView = 'menu'"
+        @play="startGame"
+        @show-stats="showStats"
+      />
       
-      <div v-if="currentView === 'stats'" class="stats-wrapper">
-        <PlayerStats
-          @close="currentView = 'menu'"
-          @play="startGame"
-          @show-leaderboard="showLeaderboard"
-        />
-      </div>
+      <!-- Статистика -->
+      <PlayerStats
+        v-if="currentView === 'stats'"
+        @close="currentView = 'menu'"
+        @play="startGame"
+        @show-leaderboard="showLeaderboard"
+      />
       
-      <div v-if="currentView === 'admin'" class="admin-wrapper">
-        <AdminPanel
-          @close="currentView = 'menu'"
-        />
-      </div>
+      <!-- Админ панель -->
+      <AdminPanel
+        v-if="currentView === 'admin'"
+        @close="currentView = 'menu'"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useGameStore } from '../stores/game';
+import { useTelegram } from '../composables/useTelegram';
 import GameBoard from '../components/GameBoard.vue';
 import Leaderboard from '../components/Leaderboard.vue';
 import PlayerStats from '../components/PlayerStats.vue';
 import AdminPanel from '../components/AdminPanel.vue';
 
 const gameStore = useGameStore();
+const { userId, isAdmin, userName } = useTelegram();
 
-// Состояние приложения
+// Состояние текущего view
 const currentView = ref<'menu' | 'game' | 'leaderboard' | 'stats' | 'admin'>('menu');
-const userId = ref(0);
 const chatId = ref(0);
-const userName = ref('');
 const gameMode = ref<'name' | 'department'>('name');
-const isAdmin = ref(false);
 const gameKey = ref(0);
 
-// Реальные данные для лидерборда из localStorage
-const leaderboardData = computed(() => {
-  const allStats = localStorage.getItem('allPlayersStats');
-  if (allStats) {
-    try {
-      const players = JSON.parse(allStats);
-      // Добавляем текущего игрока
-      const currentStats = localStorage.getItem('gameStats');
-      if (currentStats) {
-        const stats = JSON.parse(currentStats);
-        const currentPlayer = {
-          userId: userId.value,
-          fullName: userName.value || 'Вы',
-          totalScore: stats.score || 0,
-          accuracy: Math.round((stats.correctCount / (stats.correctCount + stats.wrongCount || 1)) * 100)
-        };
-        
-        // Обновляем или добавляем текущего игрока
-        const existingIndex = players.findIndex((p: any) => p.userId === userId.value);
-        if (existingIndex !== -1) {
-          players[existingIndex] = currentPlayer;
-        } else {
-          players.push(currentPlayer);
-        }
-      }
-      
-      // Сортируем по очкам
-      players.sort((a: any, b: any) => b.totalScore - a.totalScore);
-      
-      // Добавляем ранги
-      players.forEach((p: any, idx: number) => {
-        p.rank = idx + 1;
-      });
-      
-      return players;
-    } catch (e) {
-      console.error('Failed to load leaderboard', e);
-    }
+// Сообщение для маскота
+const mascotMessage = computed(() => {
+  if (gameStore.bestStreak > 10) {
+    return 'Ты настоящий профессионал! Продолжай удивлять!';
   }
-  return [];
+  if (gameStore.score > 1000) {
+    return 'Отличные результаты! Ты в топе игроков!';
+  }
+  if (gameStore.score > 0) {
+    return `У тебя ${gameStore.score} очков! Продолжай в том же духе!`;
+  }
+  return 'Готов проверить свои знания о коллегах? Начни игру прямо сейчас!';
 });
 
-
-// Реальная позиция текущего пользователя
-const currentUserRank = computed(() => {
-  const players = leaderboardData.value;
-  const currentPlayer = players.find((p: any) => p.userId === userId.value);
+// Методы навигации
+const startGame = async () => {
+  console.log('Starting game...');
   
-  if (currentPlayer) {
-    const top10Score = players[9]?.totalScore || 0;
-    const toTop = top10Score - (currentPlayer.totalScore || 0);
-    
-    return {
-      rank: currentPlayer.rank,
-      totalScore: currentPlayer.totalScore,
-      toTop: toTop > 0 ? toTop : 0
-    };
+  // Получаем данные пользователя из Telegram
+  const telegram = (window as any).Telegram?.WebApp;
+  let username = '';
+  let firstName = '';
+  let lastName = '';
+  
+  if (telegram?.initDataUnsafe?.user) {
+    const user = telegram.initDataUnsafe.user;
+    username = user.username || '';
+    firstName = user.first_name || '';
+    lastName = user.last_name || '';
   }
   
-  return {
-    rank: 1,
-    totalScore: 0,
-    toTop: 0
-  };
-});
-
-const startGame = () => {
-  console.log('Starting game, current stats:', { 
-    score: gameStore.score, 
-    correct: gameStore.correctCount,
-    wrong: gameStore.wrongCount 
-  });
+  // Сохраняем в localStorage для других компонентов
+  localStorage.setItem('userName', `${firstName} ${lastName}`.trim() || username || 'Игрок');
+  
+  // Передаем данные на сервер при создании сессии
+  try {
+    const response = await fetch(`http://localhost:8080/api/game/session?userId=${userId.value}&chatId=${chatId.value}&username=${encodeURIComponent(username)}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, {
+      method: 'POST'
+    });
+    const sessionId = await response.text();
+    console.log('Session created:', sessionId);
+  } catch (error) {
+    console.error('Failed to create session:', error);
+  }
+  
   gameKey.value++;
   currentView.value = 'game';
 };
 
 const handleBackToMenu = () => {
-  console.log('Back to menu, stats preserved:', {
-    score: gameStore.score,
-    correct: gameStore.correctCount,
-    wrong: gameStore.wrongCount
-  });
+  console.log('Back to menu from game');
   currentView.value = 'menu';
 };
 
 const showLeaderboard = () => {
+  console.log('Showing leaderboard');
   currentView.value = 'leaderboard';
 };
 
 const showStats = () => {
+  console.log('Showing player stats');
   currentView.value = 'stats';
 };
 
 const showAdmin = () => {
+  console.log('Showing admin panel');
   currentView.value = 'admin';
 };
 
-
+// Обработка ошибки загрузки изображения
 const handleImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
   img.style.display = 'none';
@@ -215,41 +183,33 @@ const handleImageError = (event: Event) => {
     const fallback = document.createElement('div');
     fallback.className = 'mascot-emoji-fallback';
     fallback.textContent = '🐱';
+    fallback.style.fontSize = '60px';
+    fallback.style.animation = 'float 3s ease-in-out infinite';
     parent.insertBefore(fallback, img);
   }
 };
 
-
+// Инициализация
 onMounted(() => {
-  console.log('GameView mounted, current stats from store:', {
-    score: gameStore.score,
-    correct: gameStore.correctCount,
-    accuracy: gameStore.accuracy
-  });
+  console.log('GameView mounted');
+  console.log('User ID:', userId.value);
+  console.log('Is Admin:', isAdmin.value);
+  console.log('User Name:', userName.value);
   
-  const telegram = (window as any).Telegram?.WebApp;
-  if (telegram) {
-    telegram.ready();
-    telegram.expand();
-    
-    const initDataUnsafe = telegram.initDataUnsafe;
-    if (initDataUnsafe && initDataUnsafe.user) {
-      userId.value = initDataUnsafe.user.id;
-      chatId.value = initDataUnsafe.user.id;
-      userName.value = `${initDataUnsafe.user.first_name || ''} ${initDataUnsafe.user.last_name || ''}`.trim();
-      isAdmin.value = initDataUnsafe.user.username === 'admin' || initDataUnsafe.user.id === 123456789;
-    }
-  } else {
-    userId.value = 123456789;
-    chatId.value = 123456789;
-    userName.value = 'Тестовый Пользователь';
-    isAdmin.value = true;
+  // Устанавливаем chatId
+  chatId.value = userId.value;
+  
+  // Сохраняем имя пользователя в localStorage для статистики
+  if (userName.value) {
+    localStorage.setItem('userName', userName.value);
   }
+  
+  // Загружаем сохраненную статистику
+  gameStore.loadSavedStats();
 });
 </script>
 
 <style scoped>
-/* Стили остаются те же (темная тема) */
 .game-view {
   min-height: 100vh;
   background: #000000;
@@ -283,11 +243,6 @@ onMounted(() => {
 
 .simple-menu-header {
   margin-bottom: 30px;
-}
-
-.logo-icon {
-  font-size: 60px;
-  margin-bottom: 10px;
 }
 
 .simple-title {
@@ -380,17 +335,6 @@ onMounted(() => {
   background: #ef4444;
 }
 
-.simple-btn.reset {
-  background: #2a2a2a;
-  color: #ff9800;
-  border: 1px solid #ff9800;
-}
-
-.simple-btn.reset:hover {
-  background: #ff9800;
-  color: white;
-}
-
 .simple-mascot {
   margin-top: 20px;
   padding: 20px;
@@ -398,6 +342,14 @@ onMounted(() => {
   border-radius: 20px;
   border: 1px solid #3a3a3a;
   text-align: center;
+}
+
+.mascot-image {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  margin-bottom: 10px;
+  animation: float 3s ease-in-out infinite;
 }
 
 @keyframes float {
@@ -409,17 +361,11 @@ onMounted(() => {
   }
 }
 
-.mascot-image {
-  width: 150px;
-  height: 150px;
-  object-fit: contain;
-  margin-bottom: 10px;
-  animation: float 3s ease-in-out infinite;
-}
-
 .mascot-emoji-fallback {
   font-size: 60px;
   margin-bottom: 10px;
+  animation: float 3s ease-in-out infinite;
+  display: inline-block;
 }
 
 .mascot-message {
@@ -444,6 +390,35 @@ onMounted(() => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Адаптивность */
+@media (max-width: 500px) {
+  .game-view {
+    padding: 10px;
+  }
+  
+  .simple-menu {
+    padding: 25px 20px;
+  }
+  
+  .simple-title {
+    font-size: 24px;
+  }
+  
+  .preview-value {
+    font-size: 20px;
+  }
+  
+  .simple-btn {
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+  
+  .mascot-image {
+    width: 120px;
+    height: 120px;
   }
 }
 </style>

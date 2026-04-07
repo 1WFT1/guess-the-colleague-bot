@@ -1,10 +1,11 @@
+<!-- components/GameBoard.vue -->
 <template>
   <div class="game-board">
+    <!-- Статистика -->
     <div class="stats-header">
-      <!-- Карточка очков -->
       <div class="stat-card score-card">
         <div class="stat-icon">
-          <img src="C:\Users\user\IdeaProjects\guess-the-colleague-bot\frontend\src\assets\images\score_icon.png" alt="Очки" class="stat-icon-img" />
+          <img src="/src/assets/images/score_icon.png" alt="Очки" class="stat-icon-img" />
         </div>
         <div class="stat-content">
           <div class="stat-label">ОЧКИ</div>
@@ -12,8 +13,7 @@
         </div>
       </div>
 
-      <!-- Карточка серии -->
-      <div class="stat-card streak-card" v-if="gameStore.currentStreak > 0 || gameStore.bestStreak > 0">
+      <div v-if="gameStore.currentStreak > 0 || gameStore.bestStreak > 0" class="stat-card streak-card">
         <div class="stat-icon">🔥</div>
         <div class="stat-content">
           <div class="stat-label">СЕРИЯ</div>
@@ -25,7 +25,6 @@
         </div>
       </div>
 
-      <!-- Карточка статистики -->
       <div class="stat-card stats-card">
         <div class="stat-icons">
           <div class="stat-badge correct">
@@ -40,16 +39,18 @@
       </div>
     </div>
 
+    <!-- Сообщение об ошибке -->
     <div v-if="gameStore.error" class="error-message">
       ⚠️ {{ gameStore.error }}
       <button @click="retryGame" class="retry-btn">Повторить</button>
     </div>
 
+    <!-- Вопрос -->
     <div v-if="gameStore.currentQuestion && !gameStore.isLoading" class="question-area">
       <div class="photo-container">
         <div class="photo-wrapper">
           <img 
-            :src="gameStore.currentQuestion.photoUrl || 'https://via.placeholder.com/200x200/667eea/ffffff?text=👤'" 
+            :src="currentPhotoUrl" 
             :alt="'Фото сотрудника'"
             @error="handleImageError"
             class="employee-photo"
@@ -67,30 +68,32 @@
           v-for="(option, index) in gameStore.currentQuestion.options"
           :key="index"
           @click="handleAnswer(index)"
-          :disabled="gameStore.isLoading || !!gameStore.feedback"
+          :disabled="isAnswerDisabled"
           class="option-btn"
           :class="{ 'correct-answer': showCorrectAnswer && option === correctAnswerName }"
         >
-          <span class="option-letter">{{ String.fromCharCode(65 + index) }}</span>
+          <span class="option-letter">{{ getOptionLetter(index) }}</span>
           <span class="option-text">{{ option }}</span>
         </button>
       </div>
 
-      <div v-if="gameStore.feedback" class="feedback-overlay">
-        <div class="feedback-card" :class="gameStore.feedback.isCorrect ? 'correct' : 'wrong'">
-          <div class="feedback-title">{{ gameStore.feedback.isCorrect ? 'ВЕРНО!' : 'ОШИБКА!' }}</div>
-          <div class="feedback-points">{{ gameStore.feedback.isCorrect ? '+' : '' }}{{ gameStore.feedback.pointsDelta }} баллов</div>
-          <div class="feedback-details" v-if="!gameStore.feedback.isCorrect">
+      <!-- Feedback оверлей -->
+      <div v-if="gameStore.feedback" class="feedback-overlay" @click="handleFeedbackClick">
+        <div class="feedback-card" :class="feedbackCardClass">
+          <div class="feedback-title">{{ feedbackTitle }}</div>
+          <div class="feedback-points">{{ feedbackPoints }}</div>
+          <div v-if="!gameStore.feedback.correct" class="feedback-details">
             Правильный ответ: <strong>{{ gameStore.feedback.correctAnswer }}</strong>
           </div>
-          <div class="feedback-streak" v-if="currentStreak > 0">
-            🔥 Серия: {{ currentStreak }} правильных ответа подряд!
+          <div v-if="gameStore.currentStreak > 0" class="feedback-streak">
+            🔥 Серия: {{ gameStore.currentStreak }} {{ getStreakText }}
           </div>
           <div class="loading-next">Загрузка следующего вопроса...</div>
         </div>
       </div>
     </div>
 
+    <!-- Загрузка -->
     <div v-else-if="gameStore.isLoading && !gameStore.currentQuestion" class="loading-area">
       <div class="loader"></div>
       <p>Загрузка первого вопроса...</p>
@@ -102,16 +105,14 @@
     />
     
     <button @click="backToMenu" class="menu-back-btn">
-        ← Вернуться в меню
+      ← Вернуться в меню
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useGameStore } from '../stores/game';
-import LoadingSpinner from './LoadingSpinner.vue';
 import Mascot from './Mascot.vue';
 
 const props = defineProps<{
@@ -124,15 +125,44 @@ const emit = defineEmits<{
   'back-to-menu': [];
 }>();
 
-const router = useRouter();
 const gameStore = useGameStore();
-const currentStreak = computed(() => gameStore.currentStreak);
 const showCorrectAnswer = ref(false);
 const correctAnswerName = ref('');
+let feedbackTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Computed
+const currentPhotoUrl = computed(() => {
+  return gameStore.currentQuestion?.photoUrl || 'https://via.placeholder.com/200x200/667eea/ffffff?text=👤';
+});
+
+const isAnswerDisabled = computed(() => {
+  return gameStore.isLoading || !!gameStore.feedback;
+});
+
+const feedbackCardClass = computed(() => ({
+  correct: gameStore.feedback?.correct === true,
+  wrong: gameStore.feedback?.correct === false
+}));
+
+const feedbackTitle = computed(() => {
+  return gameStore.feedback?.correct ? 'ВЕРНО!' : 'ОШИБКА!';
+});
+
+const feedbackPoints = computed(() => {
+  const delta = gameStore.feedback?.pointsDelta || 0;
+  return `${delta > 0 ? '+' : ''}${delta} баллов`;
+});
+
+const getStreakText = computed(() => {
+  const streak = gameStore.currentStreak;
+  if (streak % 10 === 1 && streak % 100 !== 11) return 'правильный ответ подряд!';
+  if ([2, 3, 4].includes(streak % 10) && ![12, 13, 14].includes(streak % 100)) return 'правильных ответа подряд!';
+  return 'правильных ответов подряд!';
+});
 
 const mascotMood = computed(() => {
   if (gameStore.feedback) {
-    return gameStore.feedback.isCorrect ? 'happy' : 'sad';
+    return gameStore.feedback.correct ? 'happy' : 'sad';
   }
   if (gameStore.isLoading) return 'thinking';
   return 'neutral';
@@ -140,38 +170,41 @@ const mascotMood = computed(() => {
 
 const mascotMessage = computed(() => {
   if (gameStore.feedback) {
-    return gameStore.feedback.isCorrect 
+    return gameStore.feedback.correct 
       ? 'Отлично! Так держать! Продолжай в том же духе!' 
       : `Ничего страшного! Правильный ответ: ${gameStore.feedback.correctAnswer}`;
   }
   if (gameStore.isLoading && !gameStore.currentQuestion) return 'Загружаем первый вопрос...';
   if (gameStore.isLoading) return 'Думаю над следующим вопросом...';
   if (gameStore.score === 0 && !gameStore.currentQuestion) return 'Привет! Давай проверим, как хорошо ты знаешь коллег!';
-  if (currentStreak.value >= 5) return 'Вау! У тебя невероятная серия! Так держать!';
-  if (currentStreak.value >= 3) return 'Отличная серия! Продолжай в том же духе!';
+  if (gameStore.currentStreak >= 5) return 'Вау! У тебя невероятная серия! Так держать!';
+  if (gameStore.currentStreak >= 3) return 'Отличная серия! Продолжай в том же духе!';
   return 'Кто это на фото? Выбери правильный ответ!';
 });
 
-const handleAnswer = async (index: number) => {
-  if (!gameStore.isLoading && !gameStore.feedback && gameStore.currentQuestion) {
-    await gameStore.submitAnswer(index);
+// Methods
+const getOptionLetter = (index: number): string => {
+  return String.fromCharCode(65 + index);
+};
 
-    if (gameStore.feedback?.isCorrect) {
-      gameStore.currentStreak = gameStore.currentStreak + 1;
-    } else {
-      gameStore.currentStreak = 0;
-      showCorrectAnswer.value = true;
-      correctAnswerName.value = gameStore.feedback?.correctAnswer || '';
-      setTimeout(() => {
-        showCorrectAnswer.value = false;
-      }, 2000);
-    }
+const handleAnswer = async (index: number) => {
+  if (isAnswerDisabled.value || !gameStore.currentQuestion) return;
+  
+  await gameStore.submitAnswer(index);
+
+  if (!gameStore.feedback?.correct) {
+    showCorrectAnswer.value = true;
+    correctAnswerName.value = gameStore.feedback?.correctAnswer || '';
+    
+    feedbackTimeout = setTimeout(() => {
+      showCorrectAnswer.value = false;
+    }, 2000);
   }
 };
 
-const handleImageError = (event: Event) => {
-  const img = event.target as HTMLImageElement;
-  img.src = 'https://via.placeholder.com/200x200/667eea/ffffff?text=👤';
+const handleFeedbackClick = () => {
+  // Опционально: закрыть фидбек при клике
+  // showCorrectAnswer.value = false;
 };
 
 const retryGame = () => {
@@ -180,36 +213,34 @@ const retryGame = () => {
 };
 
 const backToMenu = () => {
-  console.log('🔙 Back to menu button clicked - resetting game');
+  // Очищаем таймауты
+  if (feedbackTimeout) {
+    clearTimeout(feedbackTimeout);
+    feedbackTimeout = null;
+  }
   gameStore.resetGame();
-  console.log('📤 Emitting back-to-menu event to parent');
   emit('back-to-menu');
-  console.log('✅ Event emitted successfully');
 };
 
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.src = 'https://via.placeholder.com/200x200/667eea/ffffff?text=👤';
+};
 
-// Инициализируем игру при монтировании компонента
+// Lifecycle
 onMounted(() => {
-  console.log('GameBoard mounted, initializing game for user:', props.userId);
   gameStore.initGame(props.userId, props.chatId || props.userId);
 });
 
-// Следим за ошибками
-watch(() => gameStore.error, (error) => {
-  if (error) {
-    console.error('GameStore error:', error);
-  }
-});
-
-// Следим за вопросами
-watch(() => gameStore.currentQuestion, (question) => {
-  if (question) {
-    console.log('New question loaded:', question);
+onUnmounted(() => {
+  if (feedbackTimeout) {
+    clearTimeout(feedbackTimeout);
   }
 });
 </script>
 
 <style scoped>
+/* Стили остаются те же, что и в оригинале */
 .game-board {
   max-width: 600px;
   margin: 0 auto;
@@ -222,14 +253,8 @@ watch(() => gameStore.currentQuestion, (question) => {
 }
 
 @keyframes slideIn {
-  from {
-    transform: translateY(50px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .stats-header {
@@ -253,20 +278,9 @@ watch(() => gameStore.currentQuestion, (question) => {
   border: 1px solid #3a3a3a;
 }
 
-/* Для карточки очков */
-.score-card {
-  flex: 0.8;
-}
-
-/* Для карточки серии */
-.streak-card {
-  flex: 0.9;
-}
-
-/* Для карточки статистики */
-.stats-card {
-  flex: 1;
-}
+.score-card { flex: 0.8; }
+.streak-card { flex: 0.9; }
+.stats-card { flex: 1; }
 
 .stat-icon {
   width: 32px;
@@ -305,10 +319,8 @@ watch(() => gameStore.currentQuestion, (question) => {
   white-space: nowrap;
 }
 
-/* Специфичные стили для серии */
 .streak-card .stat-value {
   color: #ff9800;
-  font-size: 20px;
 }
 
 .stat-record-full {
@@ -324,8 +336,6 @@ watch(() => gameStore.currentQuestion, (question) => {
   font-size: 9px;
   color: #888;
   letter-spacing: 0.5px;
-  margin-bottom: 2px;
-  white-space: nowrap;
 }
 
 .record-value {
@@ -337,7 +347,6 @@ watch(() => gameStore.currentQuestion, (question) => {
   border-radius: 12px;
 }
 
-/* Статистика правильных/неправильных */
 .stat-icons {
   display: flex;
   gap: 8px;
@@ -355,7 +364,6 @@ watch(() => gameStore.currentQuestion, (question) => {
   font-size: 13px;
   font-weight: 600;
   flex: 1;
-  transition: all 0.2s ease;
 }
 
 .stat-badge.correct {
@@ -368,58 +376,8 @@ watch(() => gameStore.currentQuestion, (question) => {
   color: #f44336;
 }
 
-.badge-icon {
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.badge-count {
-  font-size: 14px;
-  font-weight: bold;
-}
-
-/* При наведении */
-.stat-badge:hover {
-  transform: translateY(-1px);
-}
-
-.stat-badge.correct:hover {
-  background: rgba(76, 175, 80, 0.25);
-}
-
-.stat-badge.wrong:hover {
-  background: rgba(244, 67, 54, 0.25);
-}
-
-/* Для мобильных */
-@media (max-width: 500px) {
-  .stats-header {
-    gap: 8px;
-    padding: 12px;
-  }
-  
-  .stat-card {
-    padding: 8px;
-  }
-  
-  .stat-icon {
-    width: 28px;
-    height: 28px;
-    font-size: 14px;
-  }
-  
-  .stat-value {
-    font-size: 16px;
-  }
-  
-  .stat-label {
-    font-size: 8px;
-  }
-  
-  .badge-count {
-    font-size: 10px;
-  }
-}
+.badge-icon { font-size: 12px; }
+.badge-count { font-size: 14px; font-weight: bold; }
 
 .question-area {
   padding: 30px;
@@ -428,14 +386,8 @@ watch(() => gameStore.currentQuestion, (question) => {
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .photo-container {
@@ -467,45 +419,18 @@ watch(() => gameStore.currentQuestion, (question) => {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(102,126,234,0.3) 0%, rgba(118,75,162,0) 70%);
+  background: radial-gradient(circle, rgba(79,79,244,0.3) 0%, rgba(79,79,244,0) 70%);
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.5;
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.1);
-    opacity: 0.8;
-  }
-}
-
-.best-streak {
-  font-size: 10px;
-  opacity: 0.8;
-  margin-top: 2px;
-}
-
-.streak-info {
-  flex: 1;
-}
-
-.streak-label {
-  font-size: 10px;
-  opacity: 0.8;
-}
-
-.streak-value {
-  font-size: 24px;
-  font-weight: bold;
-  line-height: 1;
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; }
 }
 
 .question-text {
   text-align: center;
-  color: #667eea;
+  color: #4f4ff4;
   margin-bottom: 30px;
   font-size: 24px;
   font-weight: bold;
@@ -521,21 +446,22 @@ watch(() => gameStore.currentQuestion, (question) => {
 .option-btn {
   position: relative;
   padding: 15px;
-  background: #f8f9fa;
-  border: 2px solid #e9ecef;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
   border-radius: 15px;
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
   align-items: center;
   gap: 12px;
-  overflow: hidden;
+  color: #ffffff;
 }
 
 .option-btn:hover:not(:disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 10px 20px rgba(102,126,234,0.2);
-  border-color: #667eea;
+  background: #4f4ff4;
+  border-color: #4f4ff4;
+  color: white;
 }
 
 .option-btn.correct-answer {
@@ -553,7 +479,7 @@ watch(() => gameStore.currentQuestion, (question) => {
 .option-letter {
   width: 30px;
   height: 30px;
-  background: #667eea;
+  background: #4f4ff4;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -565,7 +491,7 @@ watch(() => gameStore.currentQuestion, (question) => {
 
 .option-btn:hover:not(:disabled) .option-letter {
   background: white;
-  color: #667eea;
+  color: #4f4ff4;
 }
 
 .option-text {
@@ -601,14 +527,8 @@ watch(() => gameStore.currentQuestion, (question) => {
 }
 
 @keyframes slideDownFade {
-  0% {
-    opacity: 0;
-    transform: translateY(-60px) scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  0% { opacity: 0; transform: translateY(-60px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .feedback-card.correct {
@@ -619,16 +539,6 @@ watch(() => gameStore.currentQuestion, (question) => {
 .feedback-card.wrong {
   background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
   color: white;
-}
-
-
-@keyframes bounce {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.2);
-  }
 }
 
 .feedback-title {
@@ -668,26 +578,12 @@ watch(() => gameStore.currentQuestion, (question) => {
 }
 
 @keyframes pulse {
-  0%, 100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* Убираем лишние анимации */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .error-message {
-  background: #f44336;
+  background: #c62828;
   color: white;
   padding: 15px;
   margin: 20px;
@@ -699,7 +595,7 @@ watch(() => gameStore.currentQuestion, (question) => {
   margin-left: 10px;
   padding: 5px 15px;
   background: white;
-  color: #f44336;
+  color: #c62828;
   border: none;
   border-radius: 5px;
   cursor: pointer;
@@ -713,8 +609,8 @@ watch(() => gameStore.currentQuestion, (question) => {
 .loader {
   width: 50px;
   height: 50px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #667eea;
+  border: 3px solid #2a2a2a;
+  border-top: 3px solid #4f4ff4;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
@@ -730,92 +626,26 @@ watch(() => gameStore.currentQuestion, (question) => {
   width: calc(100% - 40px);
   margin: 20px;
   padding: 12px;
-  background: rgba(255,255,255,0.9);
-  border: none;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
   border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
   font-weight: bold;
-  color: #667eea;
+  color: #4f4ff4;
   transition: all 0.3s;
 }
 
 .menu-back-btn:hover {
-  background: white;
-  transform: translateY(-2px);
+  background: #4f4ff4;
+  color: white;
 }
 
 @media (max-width: 500px) {
-  .options-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .employee-photo {
-    width: 150px;
-    height: 150px;
-  }
-  
-  .question-text {
-    font-size: 20px;
-  }
+  .options-grid { grid-template-columns: 1fr; }
+  .employee-photo { width: 150px; height: 150px; }
+  .question-text { font-size: 20px; }
+  .stats-header { gap: 8px; padding: 12px; }
+  .stat-value { font-size: 16px; }
 }
-
-.stats-icons span:first-child {
-  color: #4caf50;
-}
-
-.stats-icons span:last-child {
-  color: #f44336;
-}
-
-.question-text {
-  color: #4f4ff4;
-}
-
-.option-btn {
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
-  color: #ffffff;
-}
-
-.option-btn:hover:not(:disabled) {
-  background: #4f4ff4;
-  border-color: #4f4ff4;
-  color: white;
-}
-
-.option-letter {
-  background: #4f4ff4;
-  color: white;
-}
-
-.feedback-card.correct {
-  background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
-}
-
-.feedback-card.wrong {
-  background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
-}
-
-.menu-back-btn {
-  background: #2a2a2a;
-  color: #4f4ff4;
-  border: 1px solid #3a3a3a;
-}
-
-.menu-back-btn:hover {
-  background: #4f4ff4;
-  color: white;
-}
-
-.error-message {
-  background: #c62828;
-  color: white;
-}
-
-.loader {
-  border: 3px solid #2a2a2a;
-  border-top: 3px solid #4f4ff4;
-}
-
 </style>

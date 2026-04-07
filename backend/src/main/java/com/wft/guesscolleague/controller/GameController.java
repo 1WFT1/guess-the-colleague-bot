@@ -4,6 +4,7 @@ import com.wft.guesscolleague.dto.AnswerRequest;
 import com.wft.guesscolleague.dto.AnswerResponse;
 import com.wft.guesscolleague.dto.QuestionDTO;
 import com.wft.guesscolleague.service.GameService;
+import com.wft.guesscolleague.service.TelegramUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,32 +28,25 @@ import java.util.UUID;
 @RequestMapping("/api/game")
 @RequiredArgsConstructor
 @Tag(name = "Game Controller", description = "API для управления игровым процессом")
+@Slf4j
 public class GameController {
 
     private final GameService gameService;
+    private final TelegramUserService telegramUserService;
 
-    /**
-     * Создает новую игровую сессию
-     * POST /api/game/session?userId=123&chatId=123
-     *
-     * @param userId ID пользователя в Telegram
-     * @param chatId ID чата в Telegram
-     * @return UUID созданной сессии
-     */
-    @Operation(summary = "Создать игровую сессию",
-            description = "Создает новую игровую сессию для пользователя или возвращает существующую активную")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Сессия успешно создана",
-                    content = @Content(schema = @Schema(implementation = UUID.class))),
-            @ApiResponse(responseCode = "400", description = "Неверные параметры запроса"),
-            @ApiResponse(responseCode = "500", description = "Внутренняя ошибка сервера")
-    })
     @PostMapping("/session")
     public ResponseEntity<UUID> createSession(
-            @Parameter(description = "ID пользователя Telegram", required = true)
             @RequestParam Long userId,
-            @Parameter(description = "ID чата Telegram")
-            @RequestParam(required = false) Long chatId) {
+            @RequestParam(required = false) Long chatId,
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) String firstName,
+            @RequestParam(required = false) String lastName) {
+
+        log.info("Creating session for user: {} (username: {})", userId, username);
+
+        // Регистрируем пользователя с полученными данными
+        telegramUserService.registerOrUpdateUser(userId, username, firstName, lastName);
+
         UUID sessionId = gameService.createSession(userId, chatId).getId();
         return ResponseEntity.ok(sessionId);
     }
@@ -73,7 +68,6 @@ public class GameController {
     })
     @GetMapping("/next-question")
     public ResponseEntity<QuestionDTO> getNextQuestion(
-            @Parameter(description = "ID игровой сессии", required = true)
             @RequestParam UUID sessionId) {
         QuestionDTO question = gameService.generateNextQuestion(sessionId);
         return ResponseEntity.ok(question);
@@ -96,7 +90,6 @@ public class GameController {
     })
     @PostMapping("/answer")
     public ResponseEntity<AnswerResponse> submitAnswer(
-            @Parameter(description = "Данные ответа", required = true)
             @RequestBody AnswerRequest request) {
         AnswerResponse response = gameService.processAnswer(request);
         return ResponseEntity.ok(response);

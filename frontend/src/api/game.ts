@@ -1,60 +1,114 @@
-import axios from 'axios';
+import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type { Question, AnswerResponse, LeaderboardData } from '../types/game';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-export interface InitData {
-  userId: number;
-  chatId?: number;
-  initData?: string;
-}
-
-export const gameApi = {
-  // Создание сессии
-  createSession: async (userId: number, chatId?: number) => {
-    const response = await api.post<string>(`/game/session?userId=${userId}&chatId=${chatId || userId}`);
-    return response.data;
-  },
-
-  // Получить следующий вопрос
-  getNextQuestion: async (sessionId: string) => {
-    const response = await api.get<Question>(`/game/next-question?sessionId=${sessionId}`);
-    return response.data;
-  },
-
-  // Отправить ответ
-  submitAnswer: async (sessionId: string, questionId: string, selectedOptionIndex: number) => {
-    console.log('Submitting answer:', { sessionId, questionId, selectedOptionIndex });
-    
-    const response = await api.post<AnswerResponse>('/game/answer', {
-      sessionId: sessionId,
-      questionId: questionId,
-      selectedOptionIndex: selectedOptionIndex
+class GameApi {
+  private api: AxiosInstance;
+  
+  constructor() {
+    this.api = axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
     });
     
-    console.log('Answer response:', response.data);
-    return response.data;
-  },
-
-  // Получить лидерборд
-  getLeaderboard: async (week: string, userId?: number) => {
-    const response = await api.get<LeaderboardData>(`/leaderboard?week=${week}&userId=${userId}`);
-    return response.data;
-  },
-
-  // Получить статус игры
-  getGameStatus: async (sessionId: string) => {
-    const response = await api.get(`/game/status?sessionId=${sessionId}`);
-    return response.data;
-  },
+    this.setupInterceptors();
+  }
   
-};
+  private setupInterceptors() {
+    this.api.interceptors.request.use(
+      (config) => {
+        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`);
+        return config;
+      },
+      (error) => {
+        console.error('[API Request Error]', error);
+        return Promise.reject(error);
+      }
+    );
+    
+    this.api.interceptors.response.use(
+      (response) => {
+        console.log(`[API Response] ${response.config.url}`, response.status);
+        return response;
+      },
+      (error: AxiosError) => {
+        console.error('[API Response Error]', error.message);
+        
+        if (error.response?.status === 401) {
+          console.warn('Unauthorized access');
+        } else if (error.response?.status === 404) {
+          console.warn('Resource not found');
+        } else if (error.code === 'ECONNABORTED') {
+          console.error('Request timeout');
+        }
+        
+        return Promise.reject(error);
+      }
+    );
+  }
+  
+  async createSession(userId: number, chatId?: number): Promise<string> {
+    const response = await this.api.post<string>(
+      `/game/session?userId=${userId}&chatId=${chatId || userId}`
+    );
+    return response.data;
+  }
+  
+  async getNextQuestion(sessionId: string): Promise<Question> {
+    const response = await this.api.get<Question>(`/game/next-question?sessionId=${sessionId}`);
+    return response.data;
+  }
+  
+  async submitAnswer(sessionId: string, questionId: string, selectedOptionIndex: number): Promise<AnswerResponse> {
+    const response = await this.api.post<AnswerResponse>('/game/answer', {
+      sessionId,
+      questionId,
+      selectedOptionIndex
+    });
+    return response.data;
+  }
+  
+  async getLeaderboard(week: string, userId?: number): Promise<LeaderboardData> {
+    const response = await this.api.get<LeaderboardData>(
+      `/leaderboard?week=${week}&userId=${userId || ''}`
+    );
+    return response.data;
+  }
+  
+  async getGameStatus(sessionId: string): Promise<any> {
+    const response = await this.api.get(`/game/status?sessionId=${sessionId}`);
+    return response.data;
+  }
+  
+  // Employee management
+  async getEmployees(): Promise<any[]> {
+    const response = await this.api.get('/employees');
+    return response.data;
+  }
+  
+  async createEmployee(data: any): Promise<any> {
+    const response = await this.api.post('/employees', data);
+    return response.data;
+  }
+  
+  async updateEmployee(id: number, data: any): Promise<any> {
+    const response = await this.api.put(`/employees/${id}`, data);
+    return response.data;
+  }
+  
+  async deleteEmployee(id: number): Promise<void> {
+    await this.api.delete(`/employees/${id}`);
+  }
+  
+  async toggleEmployeeActive(id: number, isActive: boolean): Promise<any> {
+    const response = await this.api.patch(`/employees/${id}/active`, { isActive });
+    return response.data;
+  }
+}
 
+export const gameApi = new GameApi();
 export default gameApi;
