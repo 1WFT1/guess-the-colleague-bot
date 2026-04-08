@@ -1,6 +1,7 @@
 // composables/useAdminStats.ts
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import type { Employee } from '../types/game';
+import gameApi from '../api/game';
 
 interface GameStats {
   totalPlayers: number;
@@ -12,6 +13,19 @@ interface GameStats {
     name: string;
     score: number;
   } | null;
+}
+
+interface UserStats {
+  telegramId: number;
+  fullName: string;
+  totalScore: number;
+  gamesPlayed: number;
+  correctAnswers: number;
+  wrongAnswers: number;
+  currentStreak: number;
+  bestStreak: number;
+  isActive: boolean;
+  lastActive: string;
 }
 
 export function useAdminStats() {
@@ -27,179 +41,85 @@ export function useAdminStats() {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  // Простая функция для получения активных сегодня
-  const getActiveToday = (): number => {
+  // Получение всех пользователей из бэкенда
+  const getAllUsers = async (): Promise<UserStats[]> => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const key = `daily_stats_${today}`;
-      const stored = localStorage.getItem(key);
-      
-      console.log('Checking daily stats for:', key);
-      console.log('Stored value:', stored);
-      
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const count = parsed.activeUsers || 0;
-        console.log('Active today count:', count);
-        return count;
-      }
-    } catch (e) {
-      console.error('Error getting active today:', e);
+      const response = await gameApi.getAllUsers();
+      return response;
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      return [];
     }
-    return 0;
   };
 
-  // Получение всех игроков
-  const getTotalPlayers = (employees: Employee[]): number => {
-    try {
-      const uniquePlayers = new Set();
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('game_stats_')) {
-          const userId = key.replace('game_stats_', '');
-          uniquePlayers.add(userId);
-        }
-      }
-      return uniquePlayers.size;
-    } catch (e) {
-      console.error('Error getting total players:', e);
-    }
-    return 0;
+  // Подсчет активных сегодня (из бэкенда)
+  const getActiveToday = (users: UserStats[]): number => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const active = users.filter(user => {
+      if (!user.lastActive) return false;
+      const lastActive = new Date(user.lastActive);
+      return lastActive >= today;
+    });
+    
+    return active.length;
   };
 
-  // Получение общего количества вопросов
-  const getTotalQuestions = (): number => {
-    try {
-      const saved = localStorage.getItem('guess_colleague_all_players_v1');
-      if (saved) {
-        const players = JSON.parse(saved);
-        let total = 0;
-        players.forEach((player: any) => {
-          total += (player.correctCount || 0) + (player.wrongCount || 0);
-        });
-        return total;
-      }
-    } catch (e) {
-      console.error('Error getting total questions:', e);
-    }
-    return 0;
+  // Подсчет общего количества вопросов
+  const getTotalQuestions = (users: UserStats[]): number => {
+    return users.reduce((sum, user) => sum + (user.correctAnswers + user.wrongAnswers), 0);
   };
 
-  // Получение среднего балла
-  const getAverageScore = (): number => {
-    try {
-      const saved = localStorage.getItem('guess_colleague_all_players_v1');
-      if (saved) {
-        const players = JSON.parse(saved);
-        if (players.length === 0) return 0;
-        
-        // Группируем по пользователям и суммируем очки
-        const userScores = new Map();
-        players.forEach((player: any) => {
-          const existing = userScores.get(player.userId);
-          if (existing) {
-            userScores.set(player.userId, existing + (player.totalScore || 0));
-          } else {
-            userScores.set(player.userId, player.totalScore || 0);
-          }
-        });
-        
-        let total = 0;
-        userScores.forEach((score) => {
-          total += score;
-        });
-        
-        return Math.round(total / userScores.size);
-      }
-    } catch (e) {
-      console.error('Error getting average score:', e);
-    }
-    return 0;
+  // Подсчет среднего балла
+  const getAverageScore = (users: UserStats[]): number => {
+    if (users.length === 0) return 0;
+    const totalScore = users.reduce((sum, user) => sum + user.totalScore, 0);
+    return Math.round(totalScore / users.length);
   };
 
-  // Получение лучшего игрока
-  const getTopPlayer = (): { name: string; score: number } | null => {
-    try {
-      const saved = localStorage.getItem('guess_colleague_all_players_v1');
-      if (saved) {
-        const players = JSON.parse(saved);
-        if (players.length === 0) return null;
-        
-        // Группируем по пользователям
-        const userScores = new Map();
-        players.forEach((player: any) => {
-          const existing = userScores.get(player.userId);
-          if (existing) {
-            existing.score += player.totalScore;
-          } else {
-            userScores.set(player.userId, {
-              name: player.fullName || `Игрок ${player.userId}`,
-              score: player.totalScore || 0
-            });
-          }
-        });
-        
-        // Находим максимальный счет
-        let top = null;
-        let maxScore = -1;
-        userScores.forEach((player, userId) => {
-          if (player.score > maxScore) {
-            maxScore = player.score;
-            top = player;
-          }
-        });
-        
-        return top;
-      }
-    } catch (e) {
-      console.error('Error getting top player:', e);
-    }
-    return null;
+  // Подсчет общего количества игр
+  const getTotalGames = (users: UserStats[]): number => {
+    return users.reduce((sum, user) => sum + user.gamesPlayed, 0);
   };
 
-  // Обновление всей статистики
-  const updateStats = (employees: Employee[] = []) => {
+  // Поиск лучшего игрока
+  const getTopPlayer = (users: UserStats[]): { name: string; score: number } | null => {
+    if (users.length === 0) return null;
+    
+    const best = users.reduce((prev, current) => 
+      prev.totalScore > current.totalScore ? prev : current, users[0]);
+    
+    return {
+      name: best.fullName,
+      score: best.totalScore
+    };
+  };
+
+  // Обновление всей статистики из бэкенда
+  const updateStats = async (employees: Employee[] = []) => {
     isLoading.value = true;
+    error.value = null;
     
     try {
+      const users = await getAllUsers();
+      
       stats.value = {
-        totalPlayers: getTotalPlayers(employees),
-        activeToday: getActiveToday(),
-        totalQuestions: getTotalQuestions(),
-        averageScore: getAverageScore(),
-        totalGames: getTotalGames(),
-        topPlayer: getTopPlayer()
+        totalPlayers: users.filter(u => u.isActive).length,
+        activeToday: getActiveToday(users),
+        totalQuestions: getTotalQuestions(users),
+        averageScore: getAverageScore(users),
+        totalGames: getTotalGames(users),
+        topPlayer: getTopPlayer(users)
       };
       
-      console.log('Stats updated:', stats.value);
-    } catch (e) {
-      console.error('Error updating stats:', e);
+      console.log('Stats updated from backend:', stats.value);
+    } catch (err) {
+      console.error('Error updating stats:', err);
       error.value = 'Ошибка загрузки статистики';
     } finally {
       isLoading.value = false;
     }
-  };
-
-  const getTotalGames = (): number => {
-    try {
-      let total = 0;
-      // Перебираем все daily_stats ключи
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('daily_stats_')) {
-          const value = localStorage.getItem(key);
-          if (value) {getTotalPlayers 
-            const stats = JSON.parse(value);
-            total += stats.totalGames || 0;
-          }
-        }
-      }
-      console.log('Total games all time:', total);
-      return total;
-    } catch (e) {
-      console.error('Failed to load total games:', e);
-    }
-    return 0;
   };
 
   // Обновление из списка сотрудников
@@ -212,27 +132,16 @@ export function useAdminStats() {
     updateStats();
   };
 
-  // Создаем тестовые данные для проверки
-  const createTestData = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const testStats = {
-      activeUsers: 3,
-      totalGames: 5,
-      user_123: true,
-      user_456: true,
-      user_789: true
-    };
-    localStorage.setItem(`daily_stats_${today}`, JSON.stringify(testStats));
-    console.log('Test data created:', testStats);
-    refresh();
-  };
+  // Инициализация при монтировании
+  onMounted(() => {
+    updateStats();
+  });
 
   return {
     stats,
     isLoading,
     error,
     updateFromEmployees,
-    refresh,
-    createTestData // Для отладки
+    refresh
   };
 }

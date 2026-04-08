@@ -8,6 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
@@ -43,4 +46,15 @@ public class UserController {
 
         return ResponseEntity.ok(new UserStatsDTO(user));
     }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<UserStatsDTO>> getAllUsers() {
+        log.info("Getting all users");
+        List<TelegramUser> users = telegramUserService.getAllUsers();
+        List<UserStatsDTO> dtos = users.stream()
+                .map(UserStatsDTO::new)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
+    }
+
 }

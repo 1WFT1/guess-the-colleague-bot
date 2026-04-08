@@ -138,6 +138,11 @@ class GameApi {
     return response.data;
   }
 
+  async getAllUsers(): Promise<any[]> {
+    const response = await this.api.get('/user/all');
+    return response.data;
+  }
+
 }
 
 export const gameApi = new GameApi();
