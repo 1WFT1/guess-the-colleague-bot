@@ -39,11 +39,11 @@
           </div>
           
           <div class="simple-mascot">
-            <!--<img 
-              src="/images/codic_start.png" 
+            <img 
+              src="/public/assets/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
-              @error="handleImageError"-->
+              @error="handleImageError"
             />
             <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
           </div>
@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useGameStore } from '../stores/game';
 import { useTelegram } from '../composables/useTelegram';
 import GameBoard from '../components/GameBoard.vue';
@@ -121,6 +121,23 @@ const getTelegramUserData = () => {
   };
 };
 
+// Загрузка статистики пользователя с бэкенда
+const loadUserStats = async () => {
+  if (!userId.value) return;
+  
+  try {
+    console.log('Loading user stats from backend...');
+    await gameStore.loadStatsFromBackend();
+    console.log('User stats loaded:', {
+      score: gameStore.score,
+      accuracy: gameStore.accuracy,
+      bestStreak: gameStore.bestStreak
+    });
+  } catch (error) {
+    console.error('Failed to load user stats:', error);
+  }
+};
+
 // Создание сессии на бэкенде
 const createGameSession = async (): Promise<string | null> => {
   const userData = getTelegramUserData();
@@ -141,23 +158,6 @@ const createGameSession = async (): Promise<string | null> => {
   } catch (error) {
     console.error('❌ Failed to create session:', error);
     return null;
-  }
-};
-
-// Загрузка статистики пользователя с бэкенда
-const loadUserStats = async () => {
-  try {
-    const response = await fetch(`http://localhost:8080/api/game/user-stats?userId=${userId.value}`);
-    if (response.ok) {
-      const stats = await response.json();
-      console.log('📊 User stats from backend:', stats);
-      // Обновляем статистику в store
-      if (gameStore.loadStatsFromBackend) {
-        await gameStore.loadStatsFromBackend();
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load user stats:', error);
   }
 };
 
@@ -188,6 +188,8 @@ const startGame = async () => {
 const handleBackToMenu = () => {
   console.log('🔙 Back to menu from game');
   currentView.value = 'menu';
+  // Обновляем статистику при возврате в меню
+  loadUserStats();
 };
 
 const showLeaderboard = () => {
@@ -237,6 +239,8 @@ onMounted(async () => {
   await loadUserStats();
 });
 </script>
+
+
 <style scoped>
 .game-view {
   min-height: 100vh;
