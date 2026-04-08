@@ -6,24 +6,26 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import GameView from './views/GameView.vue';
 
 onMounted(() => {
-  // Настройка Telegram WebApp
   const tg = (window as any).Telegram?.WebApp;
   if (tg) {
-    // Устанавливаем цвета темы (используем цвета вашего приложения)
+    // Получаем цвета темы Telegram
+    const themeParams = tg.themeParams;
+    
+    // Устанавливаем цвет фона из темы Telegram
+    if (themeParams.bg_color) {
+      document.body.style.backgroundColor = themeParams.bg_color;
+      document.querySelector('#app')?.setAttribute('style', `background-color: ${themeParams.bg_color}`);
+    }
+    
+    // Или принудительно устанавливаем свои цвета
     tg.setBackgroundColor('#1a1a1a');
     tg.setHeaderColor('#1a1a1a');
     tg.setBottomBarColor('#1a1a1a');
     
-    // Расширяем на весь экран
     tg.expand();
-    
-    // Сообщаем, что приложение готово
     tg.ready();
-    
-    console.log('Telegram WebApp initialized with theme:', tg.themeParams);
   }
 });
 </script>
