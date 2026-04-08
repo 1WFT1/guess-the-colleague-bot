@@ -1,4 +1,3 @@
-<!-- views/GameView.vue - полностью исправленная версия -->
 <template>
   <div class="game-view">
     <div class="game-container">
@@ -41,12 +40,12 @@
           
           <div class="simple-mascot">
             <img 
-              src="/assets/images/codic_start.png" 
+              src="/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
               @error="handleImageError"
             />
-            <div class="mascot-message">{{ mascotMessage }}</div>
+            <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
           </div>
         </div>
       </div>
@@ -88,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useGameStore } from '../stores/game';
 import { useTelegram } from '../composables/useTelegram';
 import GameBoard from '../components/GameBoard.vue';
@@ -99,82 +98,113 @@ import AdminPanel from '../components/AdminPanel.vue';
 const gameStore = useGameStore();
 const { userId, isAdmin, userName } = useTelegram();
 
-// Состояние текущего view
 const currentView = ref<'menu' | 'game' | 'leaderboard' | 'stats' | 'admin'>('menu');
 const chatId = ref(0);
 const gameMode = ref<'name' | 'department'>('name');
 const gameKey = ref(0);
 
-// Сообщение для маскота
-const mascotMessage = computed(() => {
-  if (gameStore.bestStreak > 10) {
-    return 'Ты настоящий профессионал! Продолжай удивлять!';
-  }
-  if (gameStore.score > 1000) {
-    return 'Отличные результаты! Ты в топе игроков!';
-  }
-  if (gameStore.score > 0) {
-    return `У тебя ${gameStore.score} очков! Продолжай в том же духе!`;
-  }
-  return 'Готов проверить свои знания о коллегах? Начни игру прямо сейчас!';
-});
-
-// Методы навигации
-const startGame = async () => {
-  console.log('Starting game...');
-  
-  // Получаем данные пользователя из Telegram
+// Получение данных пользователя из Telegram
+const getTelegramUserData = () => {
   const telegram = (window as any).Telegram?.WebApp;
-  let username = '';
-  let firstName = '';
-  let lastName = '';
-  
   if (telegram?.initDataUnsafe?.user) {
     const user = telegram.initDataUnsafe.user;
-    username = user.username || '';
-    firstName = user.first_name || '';
-    lastName = user.last_name || '';
+    return {
+      username: user.username || '',
+      firstName: user.first_name || '',
+      lastName: user.last_name || ''
+    };
   }
+  return {
+    username: 'test_user',
+    firstName: 'Тестовый',
+    lastName: 'Пользователь'
+  };
+};
+
+// Создание сессии на бэкенде
+const createGameSession = async (): Promise<string | null> => {
+  const userData = getTelegramUserData();
   
-  // Сохраняем в localStorage для других компонентов
-  localStorage.setItem('userName', `${firstName} ${lastName}`.trim() || username || 'Игрок');
-  
-  // Передаем данные на сервер при создании сессии
   try {
-    const response = await fetch(`http://localhost:8080/api/game/session?userId=${userId.value}&chatId=${chatId.value}&username=${encodeURIComponent(username)}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, {
-      method: 'POST'
-    });
+    const response = await fetch(
+      `http://localhost:8080/api/game/session?userId=${userId.value}&chatId=${chatId.value}&username=${encodeURIComponent(userData.username)}&firstName=${encodeURIComponent(userData.firstName)}&lastName=${encodeURIComponent(userData.lastName)}`,
+      { method: 'POST' }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
     const sessionId = await response.text();
-    console.log('Session created:', sessionId);
+    console.log('✅ Session created:', sessionId);
+    return sessionId;
   } catch (error) {
-    console.error('Failed to create session:', error);
+    console.error('❌ Failed to create session:', error);
+    return null;
+  }
+};
+
+// Загрузка статистики пользователя с бэкенда
+const loadUserStats = async () => {
+  try {
+    const response = await fetch(`http://localhost:8080/api/game/user-stats?userId=${userId.value}`);
+    if (response.ok) {
+      const stats = await response.json();
+      console.log('📊 User stats from backend:', stats);
+      // Обновляем статистику в store
+      if (gameStore.loadStatsFromBackend) {
+        await gameStore.loadStatsFromBackend();
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load user stats:', error);
+  }
+};
+
+const startGame = async () => {
+  console.log('🎮 Starting game...');
+  
+  // 1. Сохраняем имя пользователя
+  localStorage.setItem('userName', userName.value);
+  
+  // 2. Загружаем статистику с бэкенда
+  await loadUserStats();
+  
+  // 3. Создаем игровую сессию
+  const sessionId = await createGameSession();
+  if (!sessionId) {
+    console.error('Cannot start game: failed to create session');
+    return;
   }
   
+  // 4. Инициализируем игру в store
+  await gameStore.initGame(userId.value, userId.value);
+  
+  // 5. Переключаемся на игровое поле
   gameKey.value++;
   currentView.value = 'game';
 };
 
 const handleBackToMenu = () => {
-  console.log('Back to menu from game');
+  console.log('🔙 Back to menu from game');
   currentView.value = 'menu';
 };
 
 const showLeaderboard = () => {
-  console.log('Showing leaderboard');
+  console.log('🏆 Showing leaderboard');
   currentView.value = 'leaderboard';
 };
 
 const showStats = () => {
-  console.log('Showing player stats');
+  console.log('📊 Showing player stats');
   currentView.value = 'stats';
 };
 
 const showAdmin = () => {
-  console.log('Showing admin panel');
+  console.log('⚙️ Showing admin panel');
   currentView.value = 'admin';
 };
 
-// Обработка ошибки загрузки изображения
 const handleImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
   img.style.display = 'none';
@@ -189,8 +219,7 @@ const handleImageError = (event: Event) => {
   }
 };
 
-// Инициализация
-onMounted(() => {
+onMounted(async () => {
   console.log('GameView mounted');
   console.log('User ID:', userId.value);
   console.log('Is Admin:', isAdmin.value);
@@ -204,11 +233,10 @@ onMounted(() => {
     localStorage.setItem('userName', userName.value);
   }
   
-  // Загружаем сохраненную статистику
-  gameStore.loadSavedStats();
+  // Загружаем статистику с бэкенда при монтировании
+  await loadUserStats();
 });
 </script>
-
 <style scoped>
 .game-view {
   min-height: 100vh;

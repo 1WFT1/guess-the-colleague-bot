@@ -3,6 +3,8 @@ package com.wft.guesscolleague.controller;
 import com.wft.guesscolleague.dto.AnswerRequest;
 import com.wft.guesscolleague.dto.AnswerResponse;
 import com.wft.guesscolleague.dto.QuestionDTO;
+import com.wft.guesscolleague.dto.UserStatsDTO;
+import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.service.GameService;
 import com.wft.guesscolleague.service.TelegramUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -101,5 +103,27 @@ public class GameController {
         log.info("Resetting stats for user: {}", userId);
         telegramUserService.resetUserStats(userId);
         return ResponseEntity.ok().build();
+    }
+
+    // Добавьте этот метод в GameController.java
+    @GetMapping("/user-stats")
+    public ResponseEntity<UserStatsDTO> getUserStats(@RequestParam Long userId) {
+        log.info("Getting stats for user: {}", userId);
+        TelegramUser user = telegramUserService.getUserStats(userId);
+        return ResponseEntity.ok(new UserStatsDTO(user));
+    }
+
+    // Также добавьте метод для обновления статистики после игры
+    @PostMapping("/update-stats")
+    public ResponseEntity<UserStatsDTO> updateStats(
+            @RequestParam Long userId,
+            @RequestParam int score,
+            @RequestParam int correctCount,
+            @RequestParam int wrongCount,
+            @RequestParam int currentStreak,
+            @RequestParam int bestStreak) {
+        log.info("Updating stats for user: {}", userId);
+        TelegramUser user = telegramUserService.updateStats(userId, score, correctCount, wrongCount, currentStreak, bestStreak);
+        return ResponseEntity.ok(new UserStatsDTO(user));
     }
 }

@@ -116,6 +116,28 @@ class GameApi {
     const response = await this.api.post(`/game/reset-stats?userId=${userId}`);
     return response.data;
   }
+
+  async getUserStats(userId: number): Promise<any> {
+    const response = await this.api.get(`/game/user-stats?userId=${userId}`);
+    return response.data;
+  }
+
+  async updateUserStats(userId: number, stats: {
+    score: number;
+    correctCount: number;
+    wrongCount: number;
+    currentStreak: number;
+    bestStreak: number;
+  }): Promise<any> {
+    const response = await this.api.post('/game/update-stats', null, {
+      params: {
+        userId,
+        ...stats
+      }
+    });
+    return response.data;
+  }
+
 }
 
 export const gameApi = new GameApi();

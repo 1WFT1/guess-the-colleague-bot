@@ -135,5 +135,18 @@ public class TelegramUserService {
         userRepository.resetScore(telegramId);
         log.info("Reset stats for user: {}", telegramId);
     }
+    @Transactional
+    public TelegramUser updateStats(Long telegramId, int score, int correctCount, int wrongCount, int currentStreak, int bestStreak) {
+        TelegramUser user = userRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
+        user.setTotalScore(score);
+        // Сохраняем дополнительную статистику, если есть поля
+        user.setLastActive(LocalDateTime.now());
+
+        log.info("Updated stats for user {}: score={}, correct={}, wrong={}",
+                telegramId, score, correctCount, wrongCount);
+
+        return userRepository.save(user);
+    }
 }
