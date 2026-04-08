@@ -95,4 +95,11 @@ public class GameController {
         AnswerResponse response = gameService.processAnswer(request);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/reset-stats")
+    public ResponseEntity<?> resetStats(@RequestParam Long userId) {
+        log.info("Resetting stats for user: {}", userId);
+        telegramUserService.resetUserStats(userId);
+        return ResponseEntity.ok().build();
+    }
 }

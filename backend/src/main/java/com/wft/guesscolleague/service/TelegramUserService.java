@@ -128,4 +128,12 @@ public class TelegramUserService {
         return userRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
+
+    @Transactional
+    public void resetUserStats(Long telegramId) {
+        // Обнуляем счет пользователя
+        userRepository.resetScore(telegramId);
+        log.info("Reset stats for user: {}", telegramId);
+    }
+
 }

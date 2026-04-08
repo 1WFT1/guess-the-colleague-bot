@@ -272,53 +272,43 @@ export const useGameStore = defineStore('game', () => {
     isGameActive.value = true;
   };
 
-  const resetStats = () => {
+  const resetStats = async () => {
     console.log('[Reset] Starting full stats reset...');
     
-    // Обнуляем все счета в сторе
+    // Вызываем API для сброса в бэкенде
+    if (userId.value) {
+      try {
+        await gameApi.resetStats(userId.value);
+        console.log('[Reset] Backend stats reset for user:', userId.value);
+      } catch (err) {
+        console.error('[Reset] Failed to reset backend stats:', err);
+      }
+    }
+    
+    // Обнуляем локальные данные
     score.value = 0;
     correctCount.value = 0;
     wrongCount.value = 0;
     currentStreak.value = 0;
     bestStreak.value = 0;
     
-    // Полностью удаляем статистику игрока из localStorage
+    // Очищаем localStorage
     if (userId.value) {
       localStorage.removeItem(`game_stats_${userId.value}`);
-      console.log('[Reset] Removed game_stats for user:', userId.value);
     }
     
-    // ОБНУЛЯЕМ ВСЮ НЕДЕЛЬНУЮ СТАТИСТИКУ (все дни)
+    // Обнуляем недельную статистику
     const weekKey = getWeekKey();
     const emptyStats = {
-      Пн: 0,
-      Вт: 0,
-      Ср: 0,
-      Чт: 0,
-      Пт: 0,
-      Сб: 0,
-      Вс: 0,
-      totalScore: 0
+      Пн: 0, Вт: 0, Ср: 0, Чт: 0, Пт: 0, Сб: 0, Вс: 0, totalScore: 0
     };
-    
     localStorage.setItem(weekKey, JSON.stringify(emptyStats));
-    console.log('[Reset] All weekly stats cleared (all days set to 0):', weekKey);
-
-    // ПРИНУДИТЕЛЬНО синхронизируем счет с обнуленной статистикой
-    syncScoreWithWeeklyStats();
     
-    // Сохраняем обнуленную статистику
-    saveStats();
+    localStorage.removeItem('currentUserId');
+    localStorage.removeItem('guess_colleague_all_players_v1');
     
-    // Обновляем глобальный список игроков
-    updateGlobalPlayersList();
-    
-    console.log('[Reset] All game stats reset to zero');
-    
-    // Перезагружаем страницу для полного обновления интерфейса
-    setTimeout(() => {
-      window.location.reload();
-    }, 500);
+    console.log('[Reset] All stats reset, reloading...');
+    window.location.reload();
   };
 
   const totalWeeklyScore = computed(() => {

@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type { Question, AnswerResponse, LeaderboardData } from '../types/game';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080/api';
 
 class GameApi {
   private api: AxiosInstance;
@@ -83,12 +83,15 @@ class GameApi {
     const response = await this.api.get(`/game/status?sessionId=${sessionId}`);
     return response.data;
   }
+
+  
   
   // Employee management
   async getEmployees(): Promise<any[]> {
     const response = await this.api.get('/employees');
     return response.data;
   }
+
   
   async createEmployee(data: any): Promise<any> {
     const response = await this.api.post('/employees', data);
@@ -106,6 +109,11 @@ class GameApi {
   
   async toggleEmployeeActive(id: number, isActive: boolean): Promise<any> {
     const response = await this.api.patch(`/employees/${id}/active`, { isActive });
+    return response.data;
+  }
+
+  async resetStats(userId: number): Promise<void> {
+    const response = await this.api.post(`/game/reset-stats?userId=${userId}`);
     return response.data;
   }
 }
