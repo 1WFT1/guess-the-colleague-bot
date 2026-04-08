@@ -117,13 +117,21 @@ public class GameController {
     @PostMapping("/update-stats")
     public ResponseEntity<UserStatsDTO> updateStats(
             @RequestParam Long userId,
-            @RequestParam int score,
-            @RequestParam int correctCount,
-            @RequestParam int wrongCount,
+            @RequestParam int totalScore,
+            @RequestParam int correctAnswers,
+            @RequestParam int wrongAnswers,
             @RequestParam int currentStreak,
             @RequestParam int bestStreak) {
-        log.info("Updating stats for user: {}", userId);
-        TelegramUser user = telegramUserService.updateStats(userId, score, correctCount, wrongCount, currentStreak, bestStreak);
+
+        log.info("Updating stats for user: {} (score: {})", userId, totalScore);
+
+        // Обновляем статистику (метод возвращает void)
+        telegramUserService.updateStats(userId, totalScore, correctAnswers,
+                wrongAnswers, currentStreak, bestStreak);
+
+        // Получаем обновленного пользователя отдельным запросом
+        TelegramUser user = telegramUserService.getUserStats(userId);
+
         return ResponseEntity.ok(new UserStatsDTO(user));
     }
 }
