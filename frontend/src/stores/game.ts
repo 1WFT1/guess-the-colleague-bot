@@ -33,16 +33,24 @@ export const useGameStore = defineStore('game', () => {
     if (!userId.value) return false;
     
     try {
+      console.log('[Backend] Fetching stats for user:', userId.value);
       const stats = await gameApi.getUserStats(userId.value);
-      console.log('[Backend] Loaded user stats:', stats);
+      console.log('[Backend] Received stats:', stats);
       
-      score.value = stats.totalScore || 0;
-      correctCount.value = stats.correctAnswers || 0;
-      wrongCount.value = stats.wrongAnswers || 0;
-      currentStreak.value = stats.currentStreak || 0;
-      bestStreak.value = stats.bestStreak || 0;
-      
-      return true;
+      if (stats) {
+        score.value = stats.totalScore || 0;
+        correctCount.value = stats.correctAnswers || 0;
+        wrongCount.value = stats.wrongAnswers || 0;
+        currentStreak.value = stats.currentStreak || 0;
+        bestStreak.value = stats.bestStreak || 0;
+        console.log('[Backend] Stats loaded into store:', {
+          score: score.value,
+          accuracy: accuracy.value,
+          bestStreak: bestStreak.value
+        });
+        return true;
+      }
+      return false;
     } catch (err) {
       console.error('[Backend] Failed to load stats:', err);
       return false;

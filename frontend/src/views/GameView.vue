@@ -1,14 +1,13 @@
 <template>
   <div class="game-view">
     <div class="game-container">
-      <!-- Показываем загрузку, пока статистика не загрузилась -->
       <div v-if="!isStatsLoaded" class="loading-screen">
         <div class="loader"></div>
         <p>Загрузка...</p>
       </div>
       
-      <!-- Главное меню - показываем только когда статистика загружена И currentView === 'menu' -->
-      <div v-else-if="currentView === 'menu'" class="menu-wrapper">
+      <!-- Главное меню -->
+      <div v-if="currentView === 'menu'" class="menu-wrapper">
         <div class="simple-menu">
           <div class="simple-menu-header">
             <h1 class="simple-title">Угадай коллегу</h1>
@@ -45,7 +44,12 @@
           </div>
           
           <div class="simple-mascot">
-            <div class="mascot-emoji">🐱</div>
+            <img 
+              src="/public/assets/images/codic_start.png" 
+              alt="Маскот" 
+              class="mascot-image"
+              @error="handleImageError"
+            />
             <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
           </div>
         </div>
@@ -53,7 +57,7 @@
       
       <!-- Игровое поле -->
       <GameBoard 
-        v-else-if="currentView === 'game'"
+        v-if="currentView === 'game'"
         :key="gameKey"
         :userId="userId"
         :chatId="chatId"
@@ -63,7 +67,7 @@
       
       <!-- Лидерборд -->
       <Leaderboard
-        v-else-if="currentView === 'leaderboard'"
+        v-if="currentView === 'leaderboard'"
         :currentUserId="userId"
         @close="currentView = 'menu'"
         @play="startGame"
@@ -72,7 +76,7 @@
       
       <!-- Статистика -->
       <PlayerStats
-        v-else-if="currentView === 'stats'"
+        v-if="currentView === 'stats'"
         @close="currentView = 'menu'"
         @play="startGame"
         @show-leaderboard="showLeaderboard"
@@ -80,7 +84,7 @@
       
       <!-- Админ панель -->
       <AdminPanel
-        v-else-if="currentView === 'admin'"
+        v-if="currentView === 'admin'"
         @close="currentView = 'menu'"
       />
     </div>
@@ -88,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useGameStore } from '../stores/game';
 import { useTelegram } from '../composables/useTelegram';
 import GameBoard from '../components/GameBoard.vue';
@@ -111,12 +115,16 @@ const loadUserStats = async () => {
   
   try {
     console.log('Loading user stats from backend...');
-    await gameStore.loadStatsFromBackend();
-    console.log('User stats loaded:', {
-      score: gameStore.score,
-      accuracy: gameStore.accuracy,
-      bestStreak: gameStore.bestStreak
-    });
+    const success = await gameStore.loadStatsFromBackend();
+    if (success) {
+      console.log('User stats loaded:', {
+        score: gameStore.score,
+        accuracy: gameStore.accuracy,
+        bestStreak: gameStore.bestStreak
+      });
+    } else {
+      console.log('Failed to load stats, using defaults');
+    }
   } catch (error) {
     console.error('Failed to load user stats:', error);
   } finally {
@@ -168,30 +176,35 @@ const createGameSession = async (): Promise<string | null> => {
 const startGame = async () => {
   console.log('🎮 Starting game...');
   
-  // 1. Сохраняем имя пользователя
+  // Принудительно обновляем статистику перед игрой
+  await loadUserStats();
+  
+  // Сохраняем имя пользователя
   localStorage.setItem('userName', userName.value);
   
-  // 2. Создаем игровую сессию
+  // Создаем игровую сессию
   const sessionId = await createGameSession();
   if (!sessionId) {
     console.error('Cannot start game: failed to create session');
     return;
   }
   
-  // 3. Инициализируем игру в store
+  // Инициализируем игру в store
   await gameStore.initGame(userId.value, userId.value);
   
-  // 4. Переключаемся на игровое поле
+  // Переключаемся на игровое поле
   gameKey.value++;
   currentView.value = 'game';
 };
 
-const handleBackToMenu = () => {
-  console.log('🔙 Back to menu from game');
-  currentView.value = 'menu';
-  // Обновляем статистику при возврате в меню
-  loadUserStats();
-};
+  const handleBackToMenu = async () => {
+    console.log('🔙 Back to menu from game');
+    currentView.value = 'menu';
+    // Принудительно обновляем статистику
+    await loadUserStats();
+    // Принудительно обновляем отображение
+    gameKey.value++;
+  };
 
 const showLeaderboard = () => {
   console.log('🏆 Showing leaderboard');
@@ -208,24 +221,43 @@ const showAdmin = () => {
   currentView.value = 'admin';
 };
 
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.style.display = 'none';
+  const parent = img.parentElement;
+  if (parent) {
+    const fallback = document.createElement('div');
+    fallback.className = 'mascot-emoji-fallback';
+    fallback.textContent = '🐱';
+    fallback.style.fontSize = '60px';
+    fallback.style.animation = 'float 3s ease-in-out infinite';
+    parent.insertBefore(fallback, img);
+  }
+};
+
 onMounted(async () => {
   console.log('GameView mounted');
   console.log('User ID:', userId.value);
   console.log('Is Admin:', isAdmin.value);
   console.log('User Name:', userName.value);
   
-  // Устанавливаем chatId
   chatId.value = userId.value;
   
-  // Сохраняем имя пользователя
   if (userName.value) {
     localStorage.setItem('userName', userName.value);
   }
   
-  // Загружаем статистику с бэкенда
+  // Показываем загрузку
+  isStatsLoaded.value = false;
+  
+  // Загружаем статистику
   await loadUserStats();
+  
+  // Даем время на отрисовку
+  await new Promise(resolve => setTimeout(resolve, 100));
 });
 </script>
+
 
 <style scoped>
 .game-view {
@@ -237,35 +269,6 @@ onMounted(async () => {
 .game-container {
   max-width: 600px;
   margin: 0 auto;
-}
-
-/* Стили для экрана загрузки */
-.loading-screen {
-  background: #1a1a1a;
-  border-radius: 30px;
-  padding: 60px 30px;
-  text-align: center;
-  border: 1px solid #2a2a2a;
-}
-
-.loader {
-  width: 50px;
-  height: 50px;
-  border: 3px solid #2a2a2a;
-  border-top: 3px solid #4f4ff4;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.loading-screen p {
-  color: #888;
-  font-size: 14px;
 }
 
 .simple-menu {
@@ -391,8 +394,10 @@ onMounted(async () => {
   text-align: center;
 }
 
-.mascot-emoji {
-  font-size: 80px;
+.mascot-image {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
   margin-bottom: 10px;
   animation: float 3s ease-in-out infinite;
 }
@@ -404,6 +409,13 @@ onMounted(async () => {
   50% {
     transform: translateY(-10px);
   }
+}
+
+.mascot-emoji-fallback {
+  font-size: 60px;
+  margin-bottom: 10px;
+  animation: float 3s ease-in-out infinite;
+  display: inline-block;
 }
 
 .mascot-message {
