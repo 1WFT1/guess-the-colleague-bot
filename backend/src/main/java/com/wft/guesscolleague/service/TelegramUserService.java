@@ -1,5 +1,6 @@
 package com.wft.guesscolleague.service;
 
+import com.wft.guesscolleague.dto.UserStatsDTO;
 import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.repository.TelegramUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +21,6 @@ public class TelegramUserService {
 
     @Value("${admin.user.ids:}")
     private String adminUserIds;
-
-    // Регистрация пользователя
-    @Transactional
-    public TelegramUser registerOrUpdateUser(Long telegramId) {
-        return registerOrUpdateUser(telegramId, null, null, null);
-    }
 
     @Transactional
     public TelegramUser registerOrUpdateUser(Long telegramId, String username,
@@ -62,6 +57,10 @@ public class TelegramUserService {
             newUser.setLastActive(LocalDateTime.now());
             newUser.setTotalScore(0);
             newUser.setGamesPlayed(0);
+            newUser.setCorrectAnswers(0);
+            newUser.setWrongAnswers(0);
+            newUser.setCurrentStreak(0);
+            newUser.setBestStreak(0);
             newUser.setActive(true);
             newUser.setAdmin(isAdminUser(telegramId));
 
@@ -70,38 +69,14 @@ public class TelegramUserService {
         }
     }
 
-    private boolean isAdminUser(Long telegramId) {
-        if (adminUserIds == null || adminUserIds.isEmpty()) {
-            return false;
-        }
-        String[] adminIds = adminUserIds.split(",");
-        for (String adminId : adminIds) {
-            try {
-                if (Long.parseLong(adminId.trim()) == telegramId) {
-                    return true;
-                }
-            } catch (NumberFormatException e) {
-                log.warn("Invalid admin ID format: {}", adminId);
-            }
-        }
-        return false;
-    }
-
-    // НОВЫЙ МЕТОД - обновление счета (замена, а не прибавление)
     @Transactional
-    public void updateScore(Long telegramId, int score) {
-        userRepository.updateScore(telegramId, score);
-        log.debug("Updated score for user {} to {}", telegramId, score);
+    public void updateStats(Long telegramId, int totalScore, int correctAnswers,
+                            int wrongAnswers, int currentStreak, int bestStreak) {
+        userRepository.updateStats(telegramId, totalScore, correctAnswers,
+                wrongAnswers, currentStreak, bestStreak);
+        log.debug("Updated stats for user {}: score={}, correct={}, wrong={}",
+                telegramId, totalScore, correctAnswers, wrongAnswers);
     }
-
-    // УДАЛИТЕ ИЛИ ЗАКОММЕНТИРУЙТЕ старый метод addScore
-    /*
-    @Transactional
-    public void addScore(Long telegramId, int points) {
-        userRepository.addScore(telegramId, points);
-        log.debug("Added {} points to user {}", points, telegramId);
-    }
-    */
 
     @Transactional
     public void incrementGamesPlayed(Long telegramId) {

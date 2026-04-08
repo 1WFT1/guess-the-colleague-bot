@@ -9,7 +9,7 @@
         </div>
         <div class="stat-content">
           <div class="stat-label">ОЧКИ</div>
-          <div class="stat-value">{{ gameStore.totalWeeklyScore }}</div>
+          <div class="stat-value">{{ gameStore.score }}</div>
         </div>
       </div>
 

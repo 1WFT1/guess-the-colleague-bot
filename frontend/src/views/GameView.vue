@@ -10,7 +10,7 @@
 
           <div class="stats-preview">
             <div class="preview-card">
-              <div class="preview-value">{{ gameStore.totalWeeklyScore }}</div>
+              <div class="preview-value">{{ gameStore.score }}</div>
               <div class="preview-label">Всего очков</div>
             </div>
             <div class="preview-card">

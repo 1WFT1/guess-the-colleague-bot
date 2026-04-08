@@ -1,8 +1,8 @@
+// frontend/src/stores/game.ts
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import gameApi from '../api/game';
-import { saveTodayStats, loadCurrentWeekStats, getWeekKey, getWeekDay, WeekDay } from '../utils/weeklyStats';
-import type { Question, AnswerResponse, GameStats } from '../types/game';
+import type { Question, AnswerResponse } from '../types/game';
 
 export const useGameStore = defineStore('game', () => {
   // State
@@ -27,15 +27,6 @@ export const useGameStore = defineStore('game', () => {
   });
 
   const totalQuestions = computed(() => correctCount.value + wrongCount.value);
-  
-  // Общая сумма очков за неделю
-  const totalWeeklyScore = computed(() => {
-    const weeklyStats = getCurrentWeeklyStats();
-    if (!weeklyStats) return score.value;
-    const days: WeekDay[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-    const total = days.reduce((sum, day) => sum + (weeklyStats[day] || 0), 0);
-    return total > 0 ? total : score.value;
-  });
 
   // Загрузка статистики с бэкенда
   const loadStatsFromBackend = async () => {
@@ -46,8 +37,10 @@ export const useGameStore = defineStore('game', () => {
       console.log('[Backend] Loaded user stats:', stats);
       
       score.value = stats.totalScore || 0;
-      // correctCount и wrongCount пока не хранятся в БД, оставляем локально
-      // Но для синхронизации можно добавить поля в БД
+      correctCount.value = stats.correctAnswers || 0;
+      wrongCount.value = stats.wrongAnswers || 0;
+      currentStreak.value = stats.currentStreak || 0;
+      bestStreak.value = stats.bestStreak || 0;
       
       return true;
     } catch (err) {
@@ -62,9 +55,9 @@ export const useGameStore = defineStore('game', () => {
     
     try {
       await gameApi.updateUserStats(userId.value, {
-        score: score.value,
-        correctCount: correctCount.value,
-        wrongCount: wrongCount.value,
+        totalScore: score.value,
+        correctAnswers: correctCount.value,
+        wrongAnswers: wrongCount.value,
         currentStreak: currentStreak.value,
         bestStreak: bestStreak.value
       });
@@ -72,17 +65,6 @@ export const useGameStore = defineStore('game', () => {
     } catch (err) {
       console.error('[Backend] Failed to save stats:', err);
     }
-  };
-
-  // Сохранение в localStorage (только для недельной статистики)
-  const saveStats = () => {
-    if (!userId.value) return;
-    
-    // Сохраняем недельную статистику в localStorage
-    saveTodayStats(score.value);
-    
-    // Сохраняем в бэкенд
-    //saveStatsToBackend();
   };
 
   const updateStreak = (isCorrect: boolean) => {
@@ -96,29 +78,6 @@ export const useGameStore = defineStore('game', () => {
     }
   };
 
-  const recordDailyActivity = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const key = `daily_stats_${today}`;
-    
-    let dailyStats: any = { activeUsers: 0, totalGames: 0 };
-    const stored = localStorage.getItem(key);
-    
-    if (stored) {
-      try {
-        dailyStats = JSON.parse(stored);
-      } catch (e) {}
-    }
-    
-    const userKey = `user_${userId.value}`;
-    if (!dailyStats[userKey]) {
-      dailyStats[userKey] = true;
-      dailyStats.activeUsers++;
-    }
-    
-    dailyStats.totalGames++;
-    localStorage.setItem(key, JSON.stringify(dailyStats));
-  };
-
   // Public methods
   const initGame = async (telegramUserId: number, telegramChatId?: number) => {
     try {
@@ -128,8 +87,6 @@ export const useGameStore = defineStore('game', () => {
       
       // Загружаем статистику с бэкенда
       await loadStatsFromBackend();
-      
-      recordDailyActivity();
       
       const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
       sessionId.value = id;
@@ -183,8 +140,8 @@ export const useGameStore = defineStore('game', () => {
         wrongCount.value++;
       }
       
-      // Сохраняем статистику (в бэкенд и localStorage для недельной)
-      saveStats();
+      // Сохраняем статистику в бэкенд
+      await saveStatsToBackend();
       
       feedback.value = result;
       
@@ -218,15 +175,8 @@ export const useGameStore = defineStore('game', () => {
     currentStreak.value = 0;
     bestStreak.value = 0;
     
-    // Временно отключаем сохранение в бэкенд
-    // await saveStatsToBackend();
-    
-    // Обнуляем недельную статистику в localStorage
-    const weekKey = getWeekKey();
-    const emptyStats = {
-      Пн: 0, Вт: 0, Ср: 0, Чт: 0, Пт: 0, Сб: 0, Вс: 0, totalScore: 0
-    };
-    localStorage.setItem(weekKey, JSON.stringify(emptyStats));
+    // Сохраняем обнуленную статистику в бэкенд
+    await saveStatsToBackend();
     
     console.log('[Reset] All game stats reset to zero');
     
@@ -236,32 +186,8 @@ export const useGameStore = defineStore('game', () => {
     }, 500);
   };
 
-  const updateStatsFromBackend = (backendStats: any) => {
-    if (backendStats) {
-      score.value = backendStats.totalScore || 0;
-      // Если бэкенд возвращает дополнительную статистику
-      if (backendStats.correctAnswers !== undefined) {
-        correctCount.value = backendStats.correctAnswers;
-      }
-      if (backendStats.wrongAnswers !== undefined) {
-        wrongCount.value = backendStats.wrongAnswers;
-      }
-      if (backendStats.bestStreak !== undefined) {
-        bestStreak.value = backendStats.bestStreak;
-      }
-      console.log('[Store] Updated stats from backend:', {
-        score: score.value,
-        correct: correctCount.value,
-        wrong: wrongCount.value
-      });
-    }
-  };
-
-  const getCurrentWeeklyStats = () => {
-    return loadCurrentWeekStats();
-  };
-
   return {
+    // State
     sessionId,
     userId,
     currentQuestion,
@@ -274,17 +200,18 @@ export const useGameStore = defineStore('game', () => {
     error,
     currentStreak,
     bestStreak,
-    totalWeeklyScore,
+    
+    // Getters
     accuracy,
     totalQuestions,
+    
+    // Methods
     initGame,
     loadNextQuestion,
     submitAnswer,
     resetGame,
     resetStats,
-    getCurrentWeeklyStats,
     loadStatsFromBackend,
-    saveStatsToBackend,
-    updateStatsFromBackend
+    saveStatsToBackend
   };
 });

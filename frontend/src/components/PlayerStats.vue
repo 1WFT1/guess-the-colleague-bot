@@ -1,4 +1,4 @@
-<!-- components/PlayerStats.vue - исправленная версия -->
+<!-- components/PlayerStats.vue - упрощенная версия без недельной статистики -->
 <template>
   <div class="stats-modal" @click.self="$emit('close')">
     <div class="stats-content">
@@ -10,17 +10,25 @@
       <div class="stats-body">
         <!-- Основная статистика -->
         <div class="stats-summary">
-          <StatCard
-            v-for="stat in mainStats"
-            :key="stat.label"
-            :value="stat.value"
-            :label="stat.label"
-            :color="stat.color"
-            :suffix="stat.suffix"
-          />
+          <div class="stat-card">
+            <div class="stat-value">{{ gameStore.score }}</div>
+            <div class="stat-label">Всего очков</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">{{ gameStore.accuracy }}%</div>
+            <div class="stat-label">Точность</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">{{ gameStore.totalQuestions }}</div>
+            <div class="stat-label">Вопросов</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">{{ gameStore.bestStreak }}</div>
+            <div class="stat-label">Лучшая серия</div>
+          </div>
         </div>
         
-        <!-- Дополнительная статистика -->
+        <!-- Детальная статистика -->
         <div class="stats-details">
           <div class="details-card">
             <h4>📈 Детальная статистика</h4>
@@ -52,29 +60,6 @@
             </div>
           </div>
         </div>
-        
-        <!-- Недельная динамика -->
-        <div class="weekly-chart">
-          <h3>НЕДЕЛЬНАЯ ДИНАМИКА</h3>
-          <WeeklyChart :weekly-stats="weeklyStatsAsRecord" />
-        </div>
-        
-        <!-- Достижения -->
-        <div v-if="achievements.length > 0" class="achievements">
-          <h3>🏅 Достижения</h3>
-          <div class="achievements-grid">
-            <div 
-              v-for="achievement in achievements" 
-              :key="achievement.id"
-              class="achievement-card"
-              :class="{ unlocked: achievement.unlocked }"
-            >
-              <div class="achievement-icon">{{ achievement.icon }}</div>
-              <div class="achievement-name">{{ achievement.name }}</div>
-              <div class="achievement-desc">{{ achievement.description }}</div>
-            </div>
-          </div>
-        </div>
       </div>
       
       <div class="stats-footer">
@@ -87,12 +72,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed } from 'vue';
 import { useGameStore } from '../stores/game';
-import StatCard from './common/StatCard.vue';
-import WeeklyChart from './common/WeeklyChart.vue';
-import { useAchievements } from '../composables/useAchievements';
-import type { WeeklyStats } from '../types/game';
 
 const emit = defineEmits<{
   close: [];
@@ -101,7 +82,6 @@ const emit = defineEmits<{
 }>();
 
 const gameStore = useGameStore();
-const achievementsService = useAchievements();
 
 const getRatio = computed(() => {
   const total = gameStore.totalQuestions;
@@ -110,56 +90,15 @@ const getRatio = computed(() => {
   return `${ratio.toFixed(1)}%`;
 });
 
-const mainStats = computed(() => [
-  { value: gameStore.score, label: 'Всего очков', color: '#4f4ff4', suffix: '' },
-  { value: gameStore.accuracy, label: 'Точность', color: '#4caf50', suffix: '%' },
-  { value: gameStore.totalQuestions, label: 'Вопросов', color: '#ff9800', suffix: '' },
-  { value: gameStore.bestStreak, label: 'Лучшая серия', color: '#f44336', suffix: '' }
-]);
-
-const weeklyStats = computed((): WeeklyStats => {
-  if (gameStore.getCurrentWeeklyStats && typeof gameStore.getCurrentWeeklyStats === 'function') {
-    const stats = gameStore.getCurrentWeeklyStats();
-    console.log('Weekly stats from store:', stats);
-    return stats;
-  }
-  return { 'Пн': 0, 'Вт': 0, 'Ср': 0, 'Чт': 0, 'Пт': 0, 'Сб': 0, 'Вс': 0 };
-});
-
-const weeklyStatsAsRecord = computed((): Record<string, number> => {
-  const result = { ...weeklyStats.value };
-  console.log('Weekly stats as record:', result);
-  return result;
-});
-
-const achievements = computed(() => achievementsService.getAchievements(gameStore));
-
 const canReset = computed(() => {
   return gameStore.score > 0 || gameStore.totalQuestions > 0;
 });
 
-const resetStats = () => {
-  if (confirm('Вы уверены, что хотите сбросить всю статистику? Это действие нельзя отменить!')) {
-    gameStore.resetStats();
-    achievementsService.resetAchievements();
+const resetStats = async () => {
+  if (confirm('Вы уверены, что хотите сбросить ВСЮ статистику?\n\nБудут сброшены:\n- Все очки\n- Правильные/неправильные ответы\n- Серии\n\nЭто действие нельзя отменить!')) {
+    await gameStore.resetStats();
   }
 };
-
-onMounted(() => {
-  achievementsService.checkAchievements(gameStore);
-  
-  // Debug: проверяем localStorage
-  console.log('=== PLAYER STATS DEBUG ===');
-  console.log('Current score:', gameStore.score);
-  
-  // Проверяем все weekly stats в localStorage
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('weekly_stats_')) {
-      console.log(`${key}:`, localStorage.getItem(key));
-    }
-  }
-});
 </script>
 
 <style scoped>
@@ -180,7 +119,7 @@ onMounted(() => {
 .stats-content {
   background: #1a1a1a;
   border-radius: 30px;
-  max-width: 700px;
+  max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
@@ -224,6 +163,32 @@ onMounted(() => {
   grid-template-columns: repeat(4, 1fr);
   gap: 15px;
   margin-bottom: 25px;
+}
+
+.stat-card {
+  background: #2a2a2a;
+  padding: 15px;
+  border-radius: 15px;
+  text-align: center;
+  transition: transform 0.3s;
+  border: 1px solid #3a3a3a;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: #4f4ff4;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #4f4ff4;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #888;
+  margin-top: 5px;
 }
 
 .stats-details { margin-bottom: 25px; }
@@ -271,65 +236,6 @@ onMounted(() => {
 .detail-value.wrong { color: #f44336; }
 .detail-value.streak { color: #ff9800; }
 .detail-value.streak-best { color: #ffc107; }
-
-.weekly-chart {
-  margin-top: 25px;
-  margin-bottom: 25px;
-}
-
-.weekly-chart h3 {
-  text-align: center;
-  margin-bottom: 20px;
-  color: white;
-  font-size: 16px;
-}
-
-.achievements { margin-top: 25px; }
-
-.achievements h3 {
-  color: white;
-  font-size: 16px;
-  margin-bottom: 15px;
-}
-
-.achievements-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.achievement-card {
-  background: #2a2a2a;
-  border-radius: 12px;
-  padding: 12px;
-  text-align: center;
-  opacity: 0.5;
-  transition: all 0.3s;
-  border: 1px solid #3a3a3a;
-}
-
-.achievement-card.unlocked {
-  opacity: 1;
-  background: linear-gradient(135deg, #2a2a2a 0%, #1a2a3a 100%);
-  border-color: #ffd700;
-}
-
-.achievement-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-
-.achievement-name {
-  font-size: 14px;
-  font-weight: bold;
-  color: white;
-  margin-bottom: 4px;
-}
-
-.achievement-desc {
-  font-size: 10px;
-  color: #888;
-}
 
 .stats-footer {
   padding: 20px;
@@ -383,10 +289,6 @@ onMounted(() => {
   
   .details-grid {
     grid-template-columns: 1fr;
-  }
-  
-  .achievements-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

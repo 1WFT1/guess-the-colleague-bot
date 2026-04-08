@@ -118,18 +118,18 @@ class GameApi {
   }
 
   async getUserStats(userId: number): Promise<any> {
-    const response = await this.api.get(`/game/user-stats?userId=${userId}`);
+    const response = await this.api.get(`/user/stats?userId=${userId}`);
     return response.data;
   }
 
   async updateUserStats(userId: number, stats: {
-    score: number;
-    correctCount: number;
-    wrongCount: number;
+    totalScore: number;
+    correctAnswers: number;
+    wrongAnswers: number;
     currentStreak: number;
     bestStreak: number;
   }): Promise<any> {
-    const response = await this.api.post('/game/update-stats', null, {
+    const response = await this.api.post('/user/update-stats', null, {
       params: {
         userId,
         ...stats

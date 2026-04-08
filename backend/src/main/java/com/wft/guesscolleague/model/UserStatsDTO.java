@@ -18,8 +18,8 @@ public class UserStatsDTO {
     private int gamesPlayed;
     private int correctAnswers;
     private int wrongAnswers;
-    private int bestStreak;
     private int currentStreak;
+    private int bestStreak;
     private boolean isAdmin;
     private boolean isActive;
     private String lastActive;
@@ -32,12 +32,12 @@ public class UserStatsDTO {
         this.lastName = user.getLastName();
         this.totalScore = user.getTotalScore();
         this.gamesPlayed = user.getGamesPlayed();
+        this.correctAnswers = user.getCorrectAnswers();
+        this.wrongAnswers = user.getWrongAnswers();
+        this.currentStreak = user.getCurrentStreak();
+        this.bestStreak = user.getBestStreak();
         this.isAdmin = user.isAdmin();
         this.isActive = user.isActive();
         this.lastActive = user.getLastActive() != null ? user.getLastActive().toString() : null;
-        this.correctAnswers = 0;
-        this.wrongAnswers = 0;
-        this.bestStreak = 0;
-        this.currentStreak = 0;
     }
 }
