@@ -5,7 +5,27 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import GameView from './views/GameView.vue';
+
+onMounted(() => {
+  // Настройка Telegram WebApp
+  const tg = (window as any).Telegram?.WebApp;
+  if (tg) {
+    // Устанавливаем цвета темы (используем цвета вашего приложения)
+    tg.setBackgroundColor('#1a1a1a');
+    tg.setHeaderColor('#1a1a1a');
+    tg.setBottomBarColor('#1a1a1a');
+    
+    // Расширяем на весь экран
+    tg.expand();
+    
+    // Сообщаем, что приложение готово
+    tg.ready();
+    
+    console.log('Telegram WebApp initialized with theme:', tg.themeParams);
+  }
+});
 </script>
 
 <style>
@@ -17,11 +37,11 @@ import GameView from './views/GameView.vue';
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: #000000;
+  background: #1a1a1a;  /* Изменено с #000000 на #1a1a1a */
 }
 
 #app {
   min-height: 100vh;
-  background: #000000;
+  background: #1a1a1a;  /* Изменено с #000000 на #1a1a1a */
 }
 </style>
