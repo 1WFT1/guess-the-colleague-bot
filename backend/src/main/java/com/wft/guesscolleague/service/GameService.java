@@ -196,11 +196,12 @@ public class GameService {
     @Transactional
     public AnswerResponse processAnswer(AnswerRequest request) {
         log.info("Processing answer for question: {}", request.getQuestionId());
+
         // Находим вопрос по ID
         QuestionAttempt attempt = attemptRepository.findById(request.getQuestionId())
                 .orElseThrow(() -> new IllegalArgumentException("Question attempt not found"));
 
-        // Проверяем, что на вопрос еще не отвечали (защита от повторной отправки)
+        // Проверяем, что на вопрос еще не отвечали
         if (attempt.getIsCorrect() != null) {
             throw new IllegalStateException("Question already answered");
         }
@@ -208,7 +209,8 @@ public class GameService {
         // Восстанавливаем варианты ответов из JSON
         List<Map<String, Object>> options;
         try {
-            options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<Map<String, Object>>>() {});
+            options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<Map<String, Object>>>() {
+            });
             log.info("Parsed {} options", options.size());
         } catch (JsonProcessingException e) {
             log.error("Failed to parse options", e);
@@ -228,21 +230,50 @@ public class GameService {
 
         log.info("Answer check - Correct: {}, Selected: {}", correctEmployeeId, selectedEmployeeId);
 
-        // Рассчитываем изменение баллов (+5 за правильный, -6 за неправильный)
-        int pointsDelta = isCorrect ? 5 : -6;
-
-        // Обновляем сессию
+        // Получаем текущую сессию
         GameSession session = attempt.getSession();
-        session.addScore(pointsDelta);  // Добавляем/списываем баллы
+        int currentScore = session.getTotalScore();
+        int pointsDelta;
+        String message;
 
         if (isCorrect) {
-            session.incrementCorrect();  // Увеличиваем счетчик правильных ответов
+            // За правильный ответ +5 баллов
+            pointsDelta = 5;
+            session.setTotalScore(currentScore + pointsDelta);
+            session.incrementCorrect();
+            message = "Верно! +5 баллов";
+            log.info("Correct answer! +5 points. New score: {}", session.getTotalScore());
         } else {
-            session.incrementWrong();    // Увеличиваем счетчик неправильных ответов
+            // За неправильный ответ: списываем 6 баллов, но только если хватает очков
+            if (currentScore >= 6) {
+                pointsDelta = -6;
+                session.setTotalScore(currentScore + pointsDelta);
+                message = "Ошибка! -6 баллов. Правильно: " + attempt.getEmployee().getFullName();
+                log.info("Wrong answer! -6 points. New score: {}", session.getTotalScore());
+            } else if (currentScore > 0 && currentScore < 6) {
+                // Если очков меньше 6, но больше 0 - списываем только то, что есть
+                pointsDelta = -currentScore;
+                session.setTotalScore(0);
+                message = "Ошибка! -" + currentScore + " баллов. Правильно: " + attempt.getEmployee().getFullName();
+                log.info("Wrong answer! -{} points (had only {}). New score: 0", currentScore, currentScore);
+            } else {
+                // Если очков 0 - не списываем
+                pointsDelta = 0;
+                session.setTotalScore(0);
+                message = "Ошибка! Правильно: " + attempt.getEmployee().getFullName() + " (у вас 0 очков, штраф не применен)";
+                log.info("Wrong answer! No points to deduct. Score remains 0");
+            }
+            session.incrementWrong();
         }
 
+        // Обновляем сессию
         session.setLastActivity(LocalDateTime.now());
         sessionRepository.save(session);
+
+        // Обновляем общий счет пользователя в таблице telegram_users
+        if (pointsDelta != 0) {
+            telegramUserService.addScore(session.getUserId(), pointsDelta);
+        }
 
         // Сохраняем результат попытки
         attempt.setSelectedOption(request.getSelectedOptionIndex());
@@ -250,12 +281,7 @@ public class GameService {
         attempt.setPointsDelta(pointsDelta);
         attemptRepository.save(attempt);
 
-        // Формируем сообщение для пользователя
-        String message = isCorrect ?
-                "Верно! +5 баллов" :
-                "Ошибка! -6 баллов. Правильно: " + attempt.getEmployee().getFullName();
-
-        log.info("Answer processed. Correct: {}, Points: {}, New score: {}",
+        log.info("Answer processed. Correct: {}, PointsDelta: {}, New score: {}",
                 isCorrect, pointsDelta, session.getTotalScore());
 
         return new AnswerResponse(

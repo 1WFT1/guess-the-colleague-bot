@@ -42,7 +42,8 @@ public class GameController {
             @RequestParam(required = false) String firstName,
             @RequestParam(required = false) String lastName) {
 
-        log.info("Creating session for user: {} (username: {})", userId, username);
+        log.info("Creating session for user: {} (username: {}, firstName: {}, lastName: {})",
+                userId, username, firstName, lastName);
 
         // Регистрируем пользователя с полученными данными
         telegramUserService.registerOrUpdateUser(userId, username, firstName, lastName);

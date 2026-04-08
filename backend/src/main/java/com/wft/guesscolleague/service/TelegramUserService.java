@@ -37,7 +37,7 @@ public class TelegramUserService {
                                              String firstName, String lastName) {
         Optional<TelegramUser> existing = userRepository.findByTelegramId(telegramId);
 
-        // Формируем полное имя
+        // Формируем полное имя из переданных данных
         String fullName = "";
         if (firstName != null && !firstName.isEmpty()) {
             fullName = firstName;
@@ -45,8 +45,11 @@ public class TelegramUserService {
         if (lastName != null && !lastName.isEmpty()) {
             fullName += (fullName.isEmpty() ? "" : " ") + lastName;
         }
+        if (fullName.isEmpty() && username != null && !username.isEmpty()) {
+            fullName = username;
+        }
         if (fullName.isEmpty()) {
-            fullName = username != null ? username : "User " + telegramId;
+            fullName = "User " + telegramId;
         }
 
         if (existing.isPresent()) {
@@ -54,7 +57,7 @@ public class TelegramUserService {
             if (username != null) user.setUsername(username);
             if (firstName != null) user.setFirstName(firstName);
             if (lastName != null) user.setLastName(lastName);
-            user.setFullName(fullName);
+            user.setFullName(fullName);  // Обновляем имя
             user.setLastActive(LocalDateTime.now());
             log.info("Updated existing user: {} ({})", user.getFullName(), telegramId);
             return userRepository.save(user);
@@ -100,6 +103,7 @@ public class TelegramUserService {
     @Transactional
     public void addScore(Long telegramId, int points) {
         userRepository.addScore(telegramId, points);
+        log.debug("Added {} points to user {}, new total should be updated", points, telegramId);
     }
 
     @Transactional

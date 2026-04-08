@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import gameApi from '../api/game';
-import { saveTodayStats, loadCurrentWeekStats, getWeekKey, getWeekDay } from '../utils/weeklyStats';
+import { saveTodayStats, loadCurrentWeekStats, getWeekKey, getWeekDay, WeekDay } from '../utils/weeklyStats';
 import type { Question, AnswerResponse, GameStats } from '../types/game';
 
 export const useGameStore = defineStore('game', () => {
@@ -104,7 +104,7 @@ export const useGameStore = defineStore('game', () => {
     const currentPlayer = {
       userId: userId.value,
       fullName: localStorage.getItem('userName') || `Игрок ${userId.value}`,
-      totalScore: score.value,
+      totalScore: totalWeeklyScore.value,
       correctCount: correctCount.value,
       wrongCount: wrongCount.value,
       accuracy: accuracy.value,
@@ -168,6 +168,22 @@ export const useGameStore = defineStore('game', () => {
     console.log('Daily activity recorded:', dailyStats);
   };
 
+  const syncScoreWithWeeklyStats = () => {
+    const weeklyStats = getCurrentWeeklyStats();
+    if (!weeklyStats) return;
+    
+    // Суммируем все дни недели
+    const days: WeekDay[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const totalWeekly = days.reduce((sum, day) => sum + (weeklyStats[day] || 0), 0);
+    
+    // Если общая сумма больше текущего счета - обновляем
+    if (totalWeekly > score.value) {
+      console.log(`Syncing score: ${score.value} -> ${totalWeekly}`);
+      score.value = totalWeekly;
+      saveStats();
+    }
+  };
+
   // Public methods
   const initGame = async (telegramUserId: number, telegramChatId?: number) => {
     try {
@@ -176,6 +192,7 @@ export const useGameStore = defineStore('game', () => {
       userId.value = telegramUserId;
       
       loadSavedStats();
+      syncScoreWithWeeklyStats();
       recordDailyActivity();
       
       const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
@@ -290,6 +307,15 @@ export const useGameStore = defineStore('game', () => {
     console.log('[Reset] All game stats reset to zero');
   };
 
+  const totalWeeklyScore = computed(() => {
+    const weeklyStats = getCurrentWeeklyStats();
+    if (!weeklyStats) return score.value;
+    // Суммируем все дни недели
+    const days: WeekDay[] = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const total = days.reduce((sum, day) => sum + (weeklyStats[day] || 0), 0);
+    return total > 0 ? total : score.value;
+  });
+
   const getCurrentWeeklyStats = () => {
     return loadCurrentWeekStats();
   };
@@ -308,6 +334,7 @@ export const useGameStore = defineStore('game', () => {
     error,
     currentStreak,
     bestStreak,
+    totalWeeklyScore,
     
     // Getters
     accuracy,
