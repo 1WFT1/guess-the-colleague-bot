@@ -12,7 +12,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addMapping("/**")
                 .allowedOrigins(
                         "https://guess-the-colleague-bot.vercel.app",
-                        "https://b434ebb165dc5c64-178-68-29-212.serveousercontent.com"  // НОВЫЙ URL!
+                        "https://1443036d45e82aaf-178-68-29-212.serveousercontent.com"  // НОВЫЙ URL!
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")

@@ -193,33 +193,6 @@ const getTelegramUserData = () => {
   };
 };
 
-// Создание сессии на бэкенде
-const createGameSession = async (): Promise<string | null> => {
-  const userData = getTelegramUserData();
-  
-  // Исправленный способ получения API URL
-  const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080/api';
-  const url = `${apiUrl}/game/session?userId=${userId.value}&chatId=${chatId.value}&username=${encodeURIComponent(userData.username)}&firstName=${encodeURIComponent(userData.firstName)}&lastName=${encodeURIComponent(userData.lastName)}`;
-  
-  showError(`🌐 Запрос к: ${url.substring(0, 80)}...`);
-  
-  try {
-    const response = await fetch(url, { method: 'POST' });
-    showError(`📡 Статус ответа: ${response.status}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    const sessionId = await response.text();
-    showError(`✅ Сессия: ${sessionId.substring(0, 8)}...`);
-    return sessionId;
-  } catch (err: any) {
-    showError(`❌ Ошибка запроса: ${err.message}`);
-    return null;
-  }
-};
-
 // Также добавьте тип для Vite env
 declare global {
   interface ImportMeta {
@@ -232,35 +205,16 @@ declare global {
 
 const startGame = async () => {
   console.log('🎮 Starting game...');
-  showError('Попытка запуска игры...');
   
-  try {
-    // 1. Сохраняем имя пользователя
-    localStorage.setItem('userName', userName.value);
-    showError(`1. Имя сохранено: ${userName.value}`);
-    
-    // 2. Создаем игровую сессию
-    showError('2. Создание сессии...');
-    const sessionId = await createGameSession();
-    if (!sessionId) {
-      showError('❌ Ошибка: не удалось создать сессию');
-      return;
-    }
-    showError(`✅ Сессия создана: ${sessionId.substring(0, 8)}...`);
-    
-    // 3. Инициализируем игру
-    showError('3. Инициализация игры...');
-    await gameStore.initGame(userId.value, userId.value);
-    showError('✅ Игра инициализирована');
-    
-    // 4. Переключаемся на игровое поле
-    gameKey.value++;
-    currentView.value = 'game';
-    showError('✅ Переход на игровое поле');
-    
-  } catch (err: any) {
-    showError(`❌ Ошибка: ${err.message}`);
-  }
+  // Сохраняем имя пользователя
+  localStorage.setItem('userName', userName.value);
+  
+  // ТОЛЬКО ОДИН РАЗ - через store
+  await gameStore.initGame(userId.value, userId.value);
+  
+  // Переключаемся на игровое поле
+  gameKey.value++;
+  currentView.value = 'game';
 };
 
   const handleBackToMenu = async () => {
@@ -327,33 +281,7 @@ onMounted(async () => {
 
 
 <style scoped>
-.connection-status {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  padding: 10px;
-  border-radius: 8px;
-  text-align: center;
-  z-index: 10000;
-  font-size: 14px;
-  font-weight: bold;
-}
 
-.connection-status.error {
-  background: #f44336;
-  color: white;
-}
-
-.connection-status.success {
-  background: #4caf50;
-  color: white;
-}
-
-.connection-status.info {
-  background: #2196f3;
-  color: white;
-}
 
 .game-view {
   min-height: 100vh;
