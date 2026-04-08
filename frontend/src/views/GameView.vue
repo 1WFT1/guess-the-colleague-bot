@@ -1,15 +1,10 @@
 <template>
   <div class="game-view">
     <div class="game-container">
-        <div v-if="connectionStatus" class="connection-status" :class="connectionStatus.type">
-          {{ connectionStatus.message }}
-        </div>
-
       <div v-if="!isStatsLoaded" class="loading-screen">
         <div class="loader"></div>
         <p>Загрузка...</p>
-      </div>
-      
+      </div>      
       <!-- Главное меню -->
       <div v-if="currentView === 'menu'" class="menu-wrapper">
         <div class="simple-menu">
