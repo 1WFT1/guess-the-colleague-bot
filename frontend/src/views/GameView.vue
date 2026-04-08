@@ -1,6 +1,11 @@
 <template>
   <div class="game-view">
     <div class="game-container">
+      <div v-if="!isStatsLoaded" class="loading-screen">
+        <div class="loader"></div>
+        <p>Загрузка...</p>
+      </div>
+      
       <!-- Главное меню -->
       <div v-if="currentView === 'menu'" class="menu-wrapper">
         <div class="simple-menu">
@@ -102,6 +107,26 @@ const currentView = ref<'menu' | 'game' | 'leaderboard' | 'stats' | 'admin'>('me
 const chatId = ref(0);
 const gameMode = ref<'name' | 'department'>('name');
 const gameKey = ref(0);
+const isStatsLoaded = ref(false);
+
+// Загрузка статистики пользователя с бэкенда
+const loadUserStats = async () => {
+  if (!userId.value) return;
+  
+  try {
+    console.log('Loading user stats from backend...');
+    await gameStore.loadStatsFromBackend();
+    isStatsLoaded.value = true;
+    console.log('User stats loaded:', {
+      score: gameStore.score,
+      accuracy: gameStore.accuracy,
+      bestStreak: gameStore.bestStreak
+    });
+  } catch (error) {
+    console.error('Failed to load user stats:', error);
+    isStatsLoaded.value = true; // Показываем интерфейс даже при ошибке
+  }
+};
 
 // Получение данных пользователя из Telegram
 const getTelegramUserData = () => {
@@ -119,23 +144,6 @@ const getTelegramUserData = () => {
     firstName: 'Тестовый',
     lastName: 'Пользователь'
   };
-};
-
-// Загрузка статистики пользователя с бэкенда
-const loadUserStats = async () => {
-  if (!userId.value) return;
-  
-  try {
-    console.log('Loading user stats from backend...');
-    await gameStore.loadStatsFromBackend();
-    console.log('User stats loaded:', {
-      score: gameStore.score,
-      accuracy: gameStore.accuracy,
-      bestStreak: gameStore.bestStreak
-    });
-  } catch (error) {
-    console.error('Failed to load user stats:', error);
-  }
 };
 
 // Создание сессии на бэкенде
@@ -230,12 +238,12 @@ onMounted(async () => {
   // Устанавливаем chatId
   chatId.value = userId.value;
   
-  // Сохраняем имя пользователя в localStorage для статистики
+  // Сохраняем имя пользователя
   if (userName.value) {
     localStorage.setItem('userName', userName.value);
   }
   
-  // Загружаем статистику с бэкенда при монтировании
+  // Загружаем статистику с бэкенда
   await loadUserStats();
 });
 </script>
