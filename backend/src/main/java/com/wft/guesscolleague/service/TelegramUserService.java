@@ -40,20 +40,30 @@ public class TelegramUserService {
         if (lastName != null && !lastName.isEmpty()) {
             fullName += (fullName.isEmpty() ? "" : " ") + lastName;
         }
-        if (fullName.isEmpty()) {
-            fullName = username != null ? username : "User " + telegramId;
-        }
 
         if (existing.isPresent()) {
             TelegramUser user = existing.get();
-            if (username != null) user.setUsername(username);
-            if (firstName != null) user.setFirstName(firstName);
-            if (lastName != null) user.setLastName(lastName);
-            user.setFullName(fullName);
+            // НЕ ОБНОВЛЯЕМ имя, если оно уже есть и не пустое!
+            // Обновляем только если пришли новые данные И старые - дефолтные
+            if (username != null && !username.isEmpty() &&
+                    (user.getUsername() == null || user.getUsername().startsWith("User "))) {
+                user.setUsername(username);
+            }
+            if (!fullName.isEmpty() &&
+                    (user.getFullName() == null || user.getFullName().startsWith("User "))) {
+                user.setFullName(fullName);
+                user.setFirstName(firstName);
+                user.setLastName(lastName);
+            }
             user.setLastActive(LocalDateTime.now());
             userRepository.save(user);
             log.info("Updated existing user: {} ({})", user.getFullName(), telegramId);
         } else {
+            // Только для новых пользователей
+            if (fullName.isEmpty()) {
+                fullName = username != null ? username : "User " + telegramId;
+            }
+
             TelegramUser newUser = new TelegramUser();
             newUser.setTelegramId(telegramId);
             newUser.setUsername(username);
@@ -114,6 +124,7 @@ public class TelegramUserService {
     @Transactional
     public void incrementGamesPlayed(Long telegramId) {
         userRepository.incrementGamesPlayed(telegramId);
+        log.info("Incremented games played for user: {}", telegramId);
     }
 
     // Метод сброса статистики
@@ -122,6 +133,8 @@ public class TelegramUserService {
         userRepository.updateStats(telegramId, 0, 0, 0, 0, 0);
         log.info("Reset stats for user: {}", telegramId);
     }
+
+
 
     // Получение пользователя
     public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {

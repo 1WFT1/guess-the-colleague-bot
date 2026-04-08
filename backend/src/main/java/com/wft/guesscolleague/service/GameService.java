@@ -44,11 +44,23 @@ public class GameService {
     public GameSession createSession(Long userId, Long chatId) {
         log.info("Creating session for user: {}", userId);
 
-        // Регистрируем пользователя (без данных, они придут с фронтенда)
-        telegramUserService.registerOrUpdateUser(userId);
+        // Получаем пользователя
+        TelegramUser user = telegramUserService.getUserStats(userId);
 
         // Увеличиваем счетчик игр
         telegramUserService.incrementGamesPlayed(userId);
+
+        // Получаем обновленные данные
+        user = telegramUserService.getUserStats(userId);
+        int userTotalScore = user.getTotalScore();
+        int userCorrectAnswers = user.getCorrectAnswers();
+        int userWrongAnswers = user.getWrongAnswers();
+        int userCurrentStreak = user.getCurrentStreak();
+        int userBestStreak = user.getBestStreak();
+        int userGamesPlayed = user.getGamesPlayed();
+
+        log.info("User stats from DB: score={}, correct={}, wrong={}, streak={}, games={}",
+                userTotalScore, userCorrectAnswers, userWrongAnswers, userCurrentStreak, userGamesPlayed);
 
         // Закрываем старые сессии
         Optional<GameSession> oldSessionOpt = sessionRepository.findByUserIdAndIsActiveTrue(userId);
@@ -59,18 +71,21 @@ public class GameService {
             log.info("Closed old session: {}", old.getId());
         }
 
-        // Создаем новую сессию с нулевыми очками
+        // Создаем новую сессию
         GameSession session = new GameSession();
         session.setUserId(userId);
         session.setChatId(chatId);
         session.setLastActivity(LocalDateTime.now());
-        session.setTotalScore(0);
-        session.setCorrectAnswers(0);
-        session.setWrongAnswers(0);
+        session.setTotalScore(userTotalScore);
+        session.setCorrectAnswers(userCorrectAnswers);
+        session.setWrongAnswers(userWrongAnswers);
+        session.setCurrentStreak(userCurrentStreak);
+        session.setBestStreak(userBestStreak);
         session.setActive(true);
 
         GameSession saved = sessionRepository.save(session);
-        log.info("Created new session: {} with score 0", saved.getId());
+        log.info("Created new session: {} with score {} (from user stats)", saved.getId(), userTotalScore);
+
         return saved;
     }
 
@@ -207,6 +222,8 @@ public class GameService {
             throw new IllegalStateException("Question already answered");
         }
 
+
+
         // Восстанавливаем варианты ответов из JSON
         List<Map<String, Object>> options;
         try {
@@ -238,17 +255,26 @@ public class GameService {
         String message;
 
         if (isCorrect) {
-            // За правильный ответ +5 баллов
             pointsDelta = 5;
-            session.setTotalScore(currentScore + pointsDelta);
+            int newScore = currentScore + pointsDelta;
+            session.setTotalScore(newScore);
             session.incrementCorrect();
+
+            // Обновляем серию
+            int newStreak = session.getCurrentStreak() + 1;
+            session.setCurrentStreak(newStreak);
+            if (newStreak > session.getBestStreak()) {
+                session.setBestStreak(newStreak);
+            }
+
             message = "Верно! +5 баллов";
             log.info("Correct answer! +5 points. New score: {}", session.getTotalScore());
         } else {
             // За неправильный ответ: списываем 6 баллов, но только если хватает очков
             if (currentScore >= 6) {
                 pointsDelta = -6;
-                session.setTotalScore(currentScore + pointsDelta);
+                int newScore = currentScore + pointsDelta;
+                session.setTotalScore(newScore);
                 message = "Ошибка! -6 баллов. Правильно: " + attempt.getEmployee().getFullName();
                 log.info("Wrong answer! -6 points. New score: {}", session.getTotalScore());
             } else if (currentScore > 0 && currentScore < 6) {
@@ -264,6 +290,7 @@ public class GameService {
                 message = "Ошибка! Правильно: " + attempt.getEmployee().getFullName() + " (у вас 0 очков, штраф не применен)";
                 log.info("Wrong answer! No points to deduct. Score remains 0");
             }
+            session.setCurrentStreak(0);
             session.incrementWrong();
         }
 

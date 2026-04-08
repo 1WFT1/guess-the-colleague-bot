@@ -1,4 +1,3 @@
-// composables/useAdminStats.ts
 import { ref, onMounted } from 'vue';
 import type { Employee } from '../types/game';
 import gameApi from '../api/game';
@@ -103,9 +102,11 @@ export function useAdminStats() {
     
     try {
       const users = await getAllUsers();
+      // Фильтруем только активных пользователей
+      const activeUsersList = users.filter(u => u.isActive === true);
       
       stats.value = {
-        totalPlayers: users.filter(u => u.isActive).length,
+        totalPlayers: activeUsersList.length,
         activeToday: getActiveToday(users),
         totalQuestions: getTotalQuestions(users),
         averageScore: getAverageScore(users),
