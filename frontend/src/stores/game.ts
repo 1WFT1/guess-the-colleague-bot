@@ -303,6 +303,9 @@ export const useGameStore = defineStore('game', () => {
     
     localStorage.setItem(weekKey, JSON.stringify(emptyStats));
     console.log('[Reset] All weekly stats cleared (all days set to 0):', weekKey);
+
+    // ПРИНУДИТЕЛЬНО синхронизируем счет с обнуленной статистикой
+    syncScoreWithWeeklyStats();
     
     // Сохраняем обнуленную статистику
     saveStats();
