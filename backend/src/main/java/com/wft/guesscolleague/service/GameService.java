@@ -12,6 +12,7 @@ import com.wft.guesscolleague.model.QuestionAttempt;
 import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.repository.GameSessionRepository;
 import com.wft.guesscolleague.repository.QuestionAttemptRepository;
+import com.wft.guesscolleague.service.TelegramUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -272,7 +273,7 @@ public class GameService {
 
         // Обновляем общий счет пользователя в таблице telegram_users
         if (pointsDelta != 0) {
-            telegramUserService.addScore(session.getUserId(), pointsDelta);
+            telegramUserService.updateScore(session.getUserId(), session.getTotalScore());
         }
 
         // Сохраняем результат попытки

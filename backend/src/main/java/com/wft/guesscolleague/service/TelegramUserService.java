@@ -21,23 +21,17 @@ public class TelegramUserService {
     @Value("${admin.user.ids:}")
     private String adminUserIds;
 
-    /**
-     * Регистрация или обновление пользователя (без дополнительных данных)
-     */
+    // Регистрация пользователя
     @Transactional
     public TelegramUser registerOrUpdateUser(Long telegramId) {
         return registerOrUpdateUser(telegramId, null, null, null);
     }
 
-    /**
-     * Регистрация или обновление пользователя с данными
-     */
     @Transactional
     public TelegramUser registerOrUpdateUser(Long telegramId, String username,
                                              String firstName, String lastName) {
         Optional<TelegramUser> existing = userRepository.findByTelegramId(telegramId);
 
-        // Формируем полное имя из переданных данных
         String fullName = "";
         if (firstName != null && !firstName.isEmpty()) {
             fullName = firstName;
@@ -45,11 +39,8 @@ public class TelegramUserService {
         if (lastName != null && !lastName.isEmpty()) {
             fullName += (fullName.isEmpty() ? "" : " ") + lastName;
         }
-        if (fullName.isEmpty() && username != null && !username.isEmpty()) {
-            fullName = username;
-        }
         if (fullName.isEmpty()) {
-            fullName = "User " + telegramId;
+            fullName = username != null ? username : "User " + telegramId;
         }
 
         if (existing.isPresent()) {
@@ -57,7 +48,7 @@ public class TelegramUserService {
             if (username != null) user.setUsername(username);
             if (firstName != null) user.setFirstName(firstName);
             if (lastName != null) user.setLastName(lastName);
-            user.setFullName(fullName);  // Обновляем имя
+            user.setFullName(fullName);
             user.setLastActive(LocalDateTime.now());
             log.info("Updated existing user: {} ({})", user.getFullName(), telegramId);
             return userRepository.save(user);
@@ -96,19 +87,29 @@ public class TelegramUserService {
         return false;
     }
 
-    public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {
-        return userRepository.findByTelegramId(telegramId);
+    // НОВЫЙ МЕТОД - обновление счета (замена, а не прибавление)
+    @Transactional
+    public void updateScore(Long telegramId, int score) {
+        userRepository.updateScore(telegramId, score);
+        log.debug("Updated score for user {} to {}", telegramId, score);
     }
 
+    // УДАЛИТЕ ИЛИ ЗАКОММЕНТИРУЙТЕ старый метод addScore
+    /*
     @Transactional
     public void addScore(Long telegramId, int points) {
         userRepository.addScore(telegramId, points);
-        log.debug("Added {} points to user {}, new total should be updated", points, telegramId);
+        log.debug("Added {} points to user {}", points, telegramId);
     }
+    */
 
     @Transactional
     public void incrementGamesPlayed(Long telegramId) {
         userRepository.incrementGamesPlayed(telegramId);
+    }
+
+    public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {
+        return userRepository.findByTelegramId(telegramId);
     }
 
     public List<TelegramUser> getLeaderboard() {
@@ -127,26 +128,5 @@ public class TelegramUserService {
     public TelegramUser getUserStats(Long telegramId) {
         return userRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-    }
-
-    @Transactional
-    public void resetUserStats(Long telegramId) {
-        // Обнуляем счет пользователя
-        userRepository.resetScore(telegramId);
-        log.info("Reset stats for user: {}", telegramId);
-    }
-    @Transactional
-    public TelegramUser updateStats(Long telegramId, int score, int correctCount, int wrongCount, int currentStreak, int bestStreak) {
-        TelegramUser user = userRepository.findByTelegramId(telegramId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        user.setTotalScore(score);
-        // Сохраняем дополнительную статистику, если есть поля
-        user.setLastActive(LocalDateTime.now());
-
-        log.info("Updated stats for user {}: score={}, correct={}, wrong={}",
-                telegramId, score, correctCount, wrongCount);
-
-        return userRepository.save(user);
     }
 }

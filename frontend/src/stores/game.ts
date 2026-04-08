@@ -82,7 +82,7 @@ export const useGameStore = defineStore('game', () => {
     saveTodayStats(score.value);
     
     // Сохраняем в бэкенд
-    saveStatsToBackend();
+    //saveStatsToBackend();
   };
 
   const updateStreak = (isCorrect: boolean) => {
@@ -218,8 +218,8 @@ export const useGameStore = defineStore('game', () => {
     currentStreak.value = 0;
     bestStreak.value = 0;
     
-    // Сохраняем обнуленную статистику на бэкенд
-    await saveStatsToBackend();
+    // Временно отключаем сохранение в бэкенд
+    // await saveStatsToBackend();
     
     // Обнуляем недельную статистику в localStorage
     const weekKey = getWeekKey();
