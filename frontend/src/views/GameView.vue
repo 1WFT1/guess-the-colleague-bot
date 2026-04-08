@@ -39,11 +39,11 @@
           </div>
           
           <div class="simple-mascot">
-            <img 
+            <!--<img 
               src="/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
-              @error="handleImageError"
+              @error="handleImageError"-->
             />
             <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
           </div>
