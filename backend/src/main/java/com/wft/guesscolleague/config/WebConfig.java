@@ -9,10 +9,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")  // Изменили с /api/** на /**
+        registry.addMapping("/**")
                 .allowedOrigins(
-                        "https://guess-the-colleague-bot.vercel.app",  // Ваш Vercel домен
-                        "https://c402691a1743dd62-178-68-29-212.serveousercontent.com"  // Новый Serveo URL
+                        "https://guess-the-colleague-bot.vercel.app",
+                        "https://b434ebb165dc5c64-178-68-29-212.serveousercontent.com"  // НОВЫЙ URL!
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")

@@ -1,11 +1,13 @@
 <template>
   <div id="app">
-    <GameView />
+    <router-view />
+    <ErrorLogger />
   </div>
 </template>
 
 <script setup lang="ts">
 import GameView from './views/GameView.vue';
+import ErrorLogger from './components/ErrorLogger.vue';
 </script>
 
 <style>

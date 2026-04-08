@@ -109,6 +109,14 @@ const gameMode = ref<'name' | 'department'>('name');
 const gameKey = ref(0);
 const isStatsLoaded = ref(false);
 
+const showError = (message: string) => {
+  if ((window as any).showError) {
+    (window as any).showError(message);
+  }
+  console.error(message);
+};
+
+
 // Загрузка статистики пользователя с бэкенда
 const loadUserStats = async () => {
   if (!userId.value) return;
@@ -154,47 +162,70 @@ const getTelegramUserData = () => {
 const createGameSession = async (): Promise<string | null> => {
   const userData = getTelegramUserData();
   
+  // Исправленный способ получения API URL
+  const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080/api';
+  const url = `${apiUrl}/game/session?userId=${userId.value}&chatId=${chatId.value}&username=${encodeURIComponent(userData.username)}&firstName=${encodeURIComponent(userData.firstName)}&lastName=${encodeURIComponent(userData.lastName)}`;
+  
+  showError(`🌐 Запрос к: ${url.substring(0, 80)}...`);
+  
   try {
-    const response = await fetch(
-      `http://localhost:8080/api/game/session?userId=${userId.value}&chatId=${chatId.value}&username=${encodeURIComponent(userData.username)}&firstName=${encodeURIComponent(userData.firstName)}&lastName=${encodeURIComponent(userData.lastName)}`,
-      { method: 'POST' }
-    );
+    const response = await fetch(url, { method: 'POST' });
+    showError(`📡 Статус ответа: ${response.status}`);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
     
     const sessionId = await response.text();
-    console.log('✅ Session created:', sessionId);
+    showError(`✅ Сессия: ${sessionId.substring(0, 8)}...`);
     return sessionId;
-  } catch (error) {
-    console.error('❌ Failed to create session:', error);
+  } catch (err: any) {
+    showError(`❌ Ошибка запроса: ${err.message}`);
     return null;
   }
 };
 
+// Также добавьте тип для Vite env
+declare global {
+  interface ImportMeta {
+    env: {
+      VITE_API_URL?: string;
+      [key: string]: string | undefined;
+    };
+  }
+}
+
 const startGame = async () => {
   console.log('🎮 Starting game...');
+  showError('Попытка запуска игры...');
   
-  // Принудительно обновляем статистику перед игрой
-  await loadUserStats();
-  
-  // Сохраняем имя пользователя
-  localStorage.setItem('userName', userName.value);
-  
-  // Создаем игровую сессию
-  const sessionId = await createGameSession();
-  if (!sessionId) {
-    console.error('Cannot start game: failed to create session');
-    return;
+  try {
+    // 1. Сохраняем имя пользователя
+    localStorage.setItem('userName', userName.value);
+    showError(`1. Имя сохранено: ${userName.value}`);
+    
+    // 2. Создаем игровую сессию
+    showError('2. Создание сессии...');
+    const sessionId = await createGameSession();
+    if (!sessionId) {
+      showError('❌ Ошибка: не удалось создать сессию');
+      return;
+    }
+    showError(`✅ Сессия создана: ${sessionId.substring(0, 8)}...`);
+    
+    // 3. Инициализируем игру
+    showError('3. Инициализация игры...');
+    await gameStore.initGame(userId.value, userId.value);
+    showError('✅ Игра инициализирована');
+    
+    // 4. Переключаемся на игровое поле
+    gameKey.value++;
+    currentView.value = 'game';
+    showError('✅ Переход на игровое поле');
+    
+  } catch (err: any) {
+    showError(`❌ Ошибка: ${err.message}`);
   }
-  
-  // Инициализируем игру в store
-  await gameStore.initGame(userId.value, userId.value);
-  
-  // Переключаемся на игровое поле
-  gameKey.value++;
-  currentView.value = 'game';
 };
 
   const handleBackToMenu = async () => {
