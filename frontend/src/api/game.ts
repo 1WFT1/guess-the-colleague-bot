@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type { Question, AnswerResponse, LeaderboardData } from '../types/game';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://1443036d45e82aaf-178-68-29-212.serveousercontent.com/api';
 
 class GameApi {
   private api: AxiosInstance;

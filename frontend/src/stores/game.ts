@@ -93,7 +93,9 @@ export const useGameStore = defineStore('game', () => {
       error.value = null;
       userId.value = telegramUserId;
       
-      // Загружаем статистику с бэкенда
+      console.log('[DEBUG] API URL:', import.meta.env.VITE_API_URL);
+      console.log('[DEBUG] Full URL:', `${import.meta.env.VITE_API_URL}/game/session?userId=${telegramUserId}`);
+      
       await loadStatsFromBackend();
       
       const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
@@ -101,8 +103,8 @@ export const useGameStore = defineStore('game', () => {
       
       await loadNextQuestion();
     } catch (err) {
+      console.error('[DEBUG] Error:', err);
       error.value = 'Не удалось создать игровую сессию. Проверьте подключение к серверу.';
-      console.error('Init game error:', err);
     } finally {
       isLoading.value = false;
     }
