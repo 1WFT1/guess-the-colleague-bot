@@ -98,12 +98,12 @@ public class GameController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/reset-stats")
-    public ResponseEntity<?> resetStats(@RequestParam Long userId) {
-        log.info("Resetting stats for user: {}", userId);
-        telegramUserService.resetUserStats(userId);
-        return ResponseEntity.ok().build();
-    }
+    //@PostMapping("/reset-stats")
+    //public ResponseEntity<?> resetStats(@RequestParam Long userId) {
+    //    log.info("Resetting stats for user: {}", userId);
+    //    telegramUserService.resetUserStats(userId);
+    //    return ResponseEntity.ok().build();
+    //}
 
     // Добавьте этот метод в GameController.java
     @GetMapping("/user-stats")

@@ -272,9 +272,7 @@ public class GameService {
         sessionRepository.save(session);
 
         // Обновляем общий счет пользователя в таблице telegram_users
-        if (pointsDelta != 0) {
-            telegramUserService.updateScore(session.getUserId(), session.getTotalScore());
-        }
+        telegramUserService.updateScore(session.getUserId(), session.getTotalScore());
 
         // Сохраняем результат попытки
         attempt.setSelectedOption(request.getSelectedOptionIndex());

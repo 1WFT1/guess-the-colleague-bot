@@ -21,6 +21,13 @@ public interface TelegramUserRepository extends JpaRepository<TelegramUser, UUID
 
     List<TelegramUser> findByIsAdminTrue();
 
+    // Метод обновления счета
+    @Modifying
+    @Transactional
+    @Query("UPDATE TelegramUser u SET u.totalScore = :score, u.lastActive = CURRENT_TIMESTAMP WHERE u.telegramId = :telegramId")
+    void updateScore(@Param("telegramId") Long telegramId, @Param("score") int score);
+
+    // Метод обновления полной статистики
     @Modifying
     @Transactional
     @Query("UPDATE TelegramUser u SET " +

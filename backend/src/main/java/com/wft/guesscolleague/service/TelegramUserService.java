@@ -1,6 +1,5 @@
 package com.wft.guesscolleague.service;
 
-import com.wft.guesscolleague.dto.UserStatsDTO;
 import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.repository.TelegramUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +21,16 @@ public class TelegramUserService {
     @Value("${admin.user.ids:}")
     private String adminUserIds;
 
+    // Регистрация пользователя без дополнительных данных
     @Transactional
-    public TelegramUser registerOrUpdateUser(Long telegramId, String username,
-                                             String firstName, String lastName) {
+    public void registerOrUpdateUser(Long telegramId) {
+        registerOrUpdateUser(telegramId, null, null, null);
+    }
+
+    // Регистрация пользователя с данными (возвращает void, а не TelegramUser)
+    @Transactional
+    public void registerOrUpdateUser(Long telegramId, String username,
+                                     String firstName, String lastName) {
         Optional<TelegramUser> existing = userRepository.findByTelegramId(telegramId);
 
         String fullName = "";
@@ -45,8 +51,8 @@ public class TelegramUserService {
             if (lastName != null) user.setLastName(lastName);
             user.setFullName(fullName);
             user.setLastActive(LocalDateTime.now());
+            userRepository.save(user);
             log.info("Updated existing user: {} ({})", user.getFullName(), telegramId);
-            return userRepository.save(user);
         } else {
             TelegramUser newUser = new TelegramUser();
             newUser.setTelegramId(telegramId);
@@ -64,11 +70,37 @@ public class TelegramUserService {
             newUser.setActive(true);
             newUser.setAdmin(isAdminUser(telegramId));
 
+            userRepository.save(newUser);
             log.info("Registered new user: {} ({})", newUser.getFullName(), telegramId);
-            return userRepository.save(newUser);
         }
     }
 
+    // Метод проверки админа (сделайте public или protected)
+    protected boolean isAdminUser(Long telegramId) {
+        if (adminUserIds == null || adminUserIds.isEmpty()) {
+            return false;
+        }
+        String[] adminIds = adminUserIds.split(",");
+        for (String adminId : adminIds) {
+            try {
+                if (Long.parseLong(adminId.trim()) == telegramId) {
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Invalid admin ID format: {}", adminId);
+            }
+        }
+        return false;
+    }
+
+    // Метод обновления счета (updateScore)
+    @Transactional
+    public void updateScore(Long telegramId, int score) {
+        userRepository.updateScore(telegramId, score);
+        log.debug("Updated score for user {} to {}", telegramId, score);
+    }
+
+    // Метод обновления полной статистики
     @Transactional
     public void updateStats(Long telegramId, int totalScore, int correctAnswers,
                             int wrongAnswers, int currentStreak, int bestStreak) {
@@ -78,11 +110,20 @@ public class TelegramUserService {
                 telegramId, totalScore, correctAnswers, wrongAnswers);
     }
 
+    // Метод увеличения счетчика игр
     @Transactional
     public void incrementGamesPlayed(Long telegramId) {
         userRepository.incrementGamesPlayed(telegramId);
     }
 
+    // Метод сброса статистики
+    @Transactional
+    public void resetUserStats(Long telegramId) {
+        userRepository.updateStats(telegramId, 0, 0, 0, 0, 0);
+        log.info("Reset stats for user: {}", telegramId);
+    }
+
+    // Получение пользователя
     public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {
         return userRepository.findByTelegramId(telegramId);
     }

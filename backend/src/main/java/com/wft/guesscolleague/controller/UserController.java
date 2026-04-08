@@ -33,10 +33,14 @@ public class UserController {
             @RequestParam int bestStreak) {
 
         log.info("Updating stats for user: {} (score: {})", userId, totalScore);
+
+        // Вызываем метод updateStats (он возвращает void)
         telegramUserService.updateStats(userId, totalScore, correctAnswers,
                 wrongAnswers, currentStreak, bestStreak);
 
+        // После обновления получаем актуальные данные пользователя
         TelegramUser user = telegramUserService.getUserStats(userId);
+
         return ResponseEntity.ok(new UserStatsDTO(user));
     }
 }
