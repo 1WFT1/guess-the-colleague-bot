@@ -1,6 +1,10 @@
 <template>
   <div class="game-view">
     <div class="game-container">
+        <div v-if="connectionStatus" class="connection-status" :class="connectionStatus.type">
+          {{ connectionStatus.message }}
+        </div>
+
       <div v-if="!isStatsLoaded" class="loading-screen">
         <div class="loader"></div>
         <p>Загрузка...</p>
@@ -99,6 +103,37 @@ import GameBoard from '../components/GameBoard.vue';
 import Leaderboard from '../components/Leaderboard.vue';
 import PlayerStats from '../components/PlayerStats.vue';
 import AdminPanel from '../components/AdminPanel.vue';
+
+const connectionStatus = ref<{ type: string; message: string } | null>(null);
+
+const showConnectionStatus = (type: 'error' | 'success' | 'info', message: string) => {
+  connectionStatus.value = { type, message };
+  setTimeout(() => {
+    connectionStatus.value = null;
+  }, 5000);
+};
+// Проверка подключения к бэкенду
+const checkBackendConnection = async () => {
+  showConnectionStatus('info', 'Проверка подключения к серверу...');
+  
+  try {
+    const apiUrl = 'https://b434ebb165dc5c64-178-68-29-212.serveousercontent.com/api';
+    const response = await fetch(`${apiUrl}/game/session?userId=${userId.value}&chatId=${chatId.value}`, {
+      method: 'POST'
+    });
+    
+    if (response.ok) {
+      showConnectionStatus('success', '✅ Подключение к серверу установлено');
+      return true;
+    } else {
+      showConnectionStatus('error', `❌ Ошибка сервера: ${response.status}`);
+      return false;
+    }
+  } catch (err: any) {
+    showConnectionStatus('error', `❌ Не удалось подключиться к серверу: ${err.message}`);
+    return false;
+  }
+};
 
 const gameStore = useGameStore();
 const { userId, isAdmin, userName } = useTelegram();
@@ -284,6 +319,7 @@ onMounted(async () => {
   // Загружаем статистику
   await loadUserStats();
   
+  await checkBackendConnection();
   // Даем время на отрисовку
   await new Promise(resolve => setTimeout(resolve, 100));
 });
@@ -291,6 +327,34 @@ onMounted(async () => {
 
 
 <style scoped>
+.connection-status {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  z-index: 10000;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.connection-status.error {
+  background: #f44336;
+  color: white;
+}
+
+.connection-status.success {
+  background: #4caf50;
+  color: white;
+}
+
+.connection-status.info {
+  background: #2196f3;
+  color: white;
+}
+
 .game-view {
   min-height: 100vh;
   background: #000000;
