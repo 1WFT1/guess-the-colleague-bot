@@ -52,18 +52,18 @@ export const useGameStore = defineStore('game', () => {
     }
     
     // Если нет сохраненной статистики, но есть недельная - восстановить
-    if (userId.value) {
-      const weeklyStats = loadCurrentWeekStats();
-      const today = getWeekDay();
-      const weeklyScore = weeklyStats[today] || 0;
-      
-      if (weeklyScore > 0) {
-        console.log('[loadSavedStats] No saved stats, restoring from weekly:', weeklyScore);
-        score.value = weeklyScore;
-        saveStats();
-        return true;
-      }
-    }
+    // if (userId.value) {
+    //   const weeklyStats = loadCurrentWeekStats();
+    //   const today = getWeekDay();
+    //   const weeklyScore = weeklyStats[today] || 0;
+    //   
+    //   if (weeklyScore > 0) {
+    //     console.log('[loadSavedStats] No saved stats, restoring from weekly:', weeklyScore);
+    //     score.value = weeklyScore;
+    //     saveStats();
+    //     return true;
+    //   }
+    // }
     
     return false;
   };
@@ -192,7 +192,7 @@ export const useGameStore = defineStore('game', () => {
       userId.value = telegramUserId;
       
       loadSavedStats();
-      syncScoreWithWeeklyStats();
+      //syncScoreWithWeeklyStats();
       recordDailyActivity();
       
       const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
