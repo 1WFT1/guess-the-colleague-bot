@@ -102,11 +102,9 @@ export function useAdminStats() {
     
     try {
       const users = await getAllUsers();
-      // Фильтруем только активных пользователей
-      const activeUsersList = users.filter(u => u.isActive === true);
       
       stats.value = {
-        totalPlayers: activeUsersList.length,
+        totalPlayers: users.length,
         activeToday: getActiveToday(users),
         totalQuestions: getTotalQuestions(users),
         averageScore: getAverageScore(users),
