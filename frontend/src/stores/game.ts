@@ -4,7 +4,7 @@ import { ref, computed } from 'vue';
 import gameApi from '../api/game';
 import type { Question, AnswerResponse } from '../types/game';
 
-export const useGameStore = defineStore('game', () => {
+export const GameStore = defineStore('game', () => {
   // State
   const sessionId = ref<string | null>(null);
   const userId = ref<number | null>(null);
@@ -87,16 +87,15 @@ const loadStatsFromBackend = async (telegramUserId?: number) => {
   };
 
   // Public methods
-const initGame = async (telegramUserId: number, telegramChatId?: number) => {
+const initGame = async (telegramUserId: number, telegramChatId?: number, gameMode?: 'name' | 'department') => {
   try {
     isLoading.value = true;
     error.value = null;
     userId.value = telegramUserId;
     
     await loadStatsFromBackend(telegramUserId);
-    //recordDailyActivity();
     
-    const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
+    const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId, gameMode);
     sessionId.value = id;
     
     await loadNextQuestion();
@@ -108,62 +107,86 @@ const initGame = async (telegramUserId: number, telegramChatId?: number) => {
   }
 };
 
-  const loadNextQuestion = async () => {
-    if (!sessionId.value) return;
+const updateGameMode = async (gameMode: 'name' | 'department') => {
+  if (!sessionId.value) {
+    console.log('No session, cannot update game mode');
+    return;
+  }
+  
+  try {
+    await gameApi.updateGameMode(sessionId.value, gameMode);
+    // Загружаем новый вопрос с новым режимом
+    await loadNextQuestion();
+  } catch (err) {
+    console.error('Failed to update game mode:', err);
+  }
+};
 
-    try {
-      isLoading.value = true;
-      feedback.value = null;
-      error.value = null;
-      
-      const question = await gameApi.getNextQuestion(sessionId.value);
-      currentQuestion.value = question;
-    } catch (err) {
-      error.value = 'Не удалось загрузить вопрос. Попробуйте позже.';
-      console.error('Load question error:', err);
-    } finally {
-      isLoading.value = false;
+const loadNextQuestion = async () => {
+  if (!sessionId.value) {
+    console.error('No sessionId, cannot load next question');
+    return;
+  }
+
+  try {
+    console.log('Loading next question for session:', sessionId.value);
+    isLoading.value = true;
+    feedback.value = null;
+    error.value = null;
+    
+    const question = await gameApi.getNextQuestion(sessionId.value);
+    console.log('Next question loaded:', question);
+    currentQuestion.value = question;
+  } catch (err) {
+    console.error('Load question error:', err);
+    error.value = 'Не удалось загрузить вопрос. Попробуйте позже.';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const submitAnswer = async (selectedIndex: number) => {
+  setTimeout(() => {
+    console.log('Loading next question...');
+    loadNextQuestion();
+  }, 2000);
+  if (!sessionId.value || !currentQuestion.value) return;
+
+  try {
+    isLoading.value = true;
+    
+    const result = await gameApi.submitAnswer(
+      sessionId.value,
+      currentQuestion.value.questionId,
+      selectedIndex
+    );
+    
+    // Update game state
+    score.value = result.newTotalScore;
+    updateStreak(result.correct);
+    
+    if (result.correct) {
+      correctCount.value++;
+    } else {
+      wrongCount.value++;
     }
-  };
-
-  const submitAnswer = async (selectedIndex: number) => {
-    if (!sessionId.value || !currentQuestion.value) return;
-
-    try {
-      isLoading.value = true;
-      
-      const result = await gameApi.submitAnswer(
-        sessionId.value,
-        currentQuestion.value.questionId,
-        selectedIndex
-      );
-      
-      // Update game state
-      score.value = result.newTotalScore;
-      updateStreak(result.correct);
-      
-      if (result.correct) {
-        correctCount.value++;
-      } else {
-        wrongCount.value++;
-      }
-      
-      // Сохраняем статистику в бэкенд
-      await saveStatsToBackend();
-      
-      feedback.value = result;
-      
-      setTimeout(() => {
-        loadNextQuestion();
-      }, 2000);
-      
-    } catch (err) {
-      console.error('Submit answer error:', err);
-      error.value = 'Не удалось отправить ответ. Проверьте подключение.';
-    } finally {
-      isLoading.value = false;
-    }
-  };
+    
+    await saveStatsToBackend();
+    
+    feedback.value = result;
+    
+    // Убедитесь, что этот setTimeout есть и работает
+    setTimeout(() => {
+      loadNextQuestion();
+    }, 2000);
+    
+  } catch (err) {
+    console.error('Submit answer error:', err);
+    error.value = 'Не удалось отправить ответ. Проверьте подключение.';
+  } finally {
+    isLoading.value = false;
+  }
+};
 
   const resetGame = () => {
     sessionId.value = null;
@@ -185,6 +208,16 @@ const initGame = async (telegramUserId: number, telegramChatId?: number) => {
     
     // Сохраняем обнуленную статистику в бэкенд
     await saveStatsToBackend();
+    
+    // Обнуляем games_played через API
+    if (userId.value) {
+      try {
+        await gameApi.resetGamesPlayed(userId.value);
+        console.log('[Reset] Games played reset for user:', userId.value);
+      } catch (err) {
+        console.error('[Reset] Failed to reset games played:', err);
+      }
+    }
     
     console.log('[Reset] All game stats reset to zero');
     
@@ -220,6 +253,7 @@ const initGame = async (telegramUserId: number, telegramChatId?: number) => {
     resetGame,
     resetStats,
     loadStatsFromBackend,
+    updateGameMode,
     saveStatsToBackend
   };
 });

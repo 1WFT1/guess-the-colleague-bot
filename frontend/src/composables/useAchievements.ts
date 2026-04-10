@@ -1,8 +1,8 @@
 // composables/useAchievements.ts
-import { ref } from 'vue';
-import type { Store } from 'pinia';
+import { ref, watch } from 'vue';
+import type { GameStore } from '../stores/game';
 
-interface Achievement {
+export interface Achievement {
   id: string;
   name: string;
   description: string;
@@ -95,8 +95,30 @@ export function useAchievements() {
     }
   ]);
 
+  const showNotification = (achievement: Achievement) => {
+    const notification = document.createElement('div');
+    notification.className = 'achievement-toast';
+    notification.innerHTML = `
+      <div class="achievement-toast-content">
+        <div class="achievement-toast-icon">${achievement.icon}</div>
+        <div class="achievement-toast-info">
+          <div class="achievement-toast-title">🏆 Достижение разблокировано!</div>
+          <div class="achievement-toast-name">${achievement.name}</div>
+          <div class="achievement-toast-desc">${achievement.description}</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => notification.classList.add('show'), 100);
+    setTimeout(() => {
+      notification.classList.remove('show');
+      setTimeout(() => notification.remove(), 300);
+    }, 4000);
+  };
+
   const loadUnlocked = () => {
-    const saved = localStorage.getItem('achievements');
+    const saved = localStorage.getItem('guess_colleague_achievements');
     if (saved) {
       try {
         const unlockedIds = JSON.parse(saved);
@@ -108,10 +130,8 @@ export function useAchievements() {
   };
 
   const saveUnlocked = () => {
-    const unlockedIds = achievements.value
-      .filter(ach => ach.unlocked)
-      .map(ach => ach.id);
-    localStorage.setItem('achievements', JSON.stringify(unlockedIds));
+    const unlockedIds = achievements.value.filter(ach => ach.unlocked).map(ach => ach.id);
+    localStorage.setItem('guess_colleague_achievements', JSON.stringify(unlockedIds));
   };
 
   const checkAchievements = (gameStore: any) => {
@@ -120,121 +140,63 @@ export function useAchievements() {
       if (!ach.unlocked && ach.condition(gameStore)) {
         ach.unlocked = true;
         changed = true;
-        showAchievementNotification(ach);
+        showNotification(ach);
       }
     });
-    if (changed) {
-      saveUnlocked();
-    }
+    if (changed) saveUnlocked();
   };
 
-  const showAchievementNotification = (achievement: Achievement) => {
-    const notification = document.createElement('div');
-    notification.className = 'achievement-notification';
-    notification.innerHTML = `
-      <div class="achievement-notification-content">
-        <span class="achievement-icon">${achievement.icon}</span>
-        <div class="achievement-info">
-          <div class="achievement-title">Достижение разблокировано!</div>
-          <div class="achievement-name">${achievement.name}</div>
-          <div class="achievement-desc">${achievement.description}</div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
-      notification.classList.remove('show');
-      setTimeout(() => {
-        notification.remove();
-      }, 300);
-    }, 3000);
-  };
-
-  const getAchievements = (gameStore: any) => {
-    checkAchievements(gameStore);
-    return achievements.value;
-  };
+  const getUnlockedCount = () => achievements.value.filter(ach => ach.unlocked).length;
+  const getTotalCount = () => achievements.value.length;
+  const getProgress = () => Math.round((getUnlockedCount() / getTotalCount()) * 100);
 
   const resetAchievements = () => {
-    achievements.value.forEach(ach => {
-      ach.unlocked = false;
-    });
+    achievements.value.forEach(ach => ach.unlocked = false);
     saveUnlocked();
   };
 
-  // Добавляем стили для уведомлений
-  const addNotificationStyles = () => {
+  const addStyles = () => {
     if (document.getElementById('achievement-styles')) return;
-    
     const style = document.createElement('style');
     style.id = 'achievement-styles';
     style.textContent = `
-      .achievement-notification {
+      .achievement-toast {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        transform: translateX(400px);
-        transition: transform 0.3s ease;
-        z-index: 10000;
+        transform: translateX(450px);
+        transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        z-index: 10001;
       }
-      
-      .achievement-notification.show {
-        transform: translateX(0);
-      }
-      
-      .achievement-notification-content {
-        background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
-        border: 2px solid #ffd700;
-        border-radius: 16px;
+      .achievement-toast.show { transform: translateX(0); }
+      .achievement-toast-content {
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border-left: 4px solid #ffd700;
+        border-radius: 12px;
         padding: 12px 20px;
         display: flex;
         align-items: center;
         gap: 15px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
       }
-      
-      .achievement-icon {
-        font-size: 40px;
-      }
-      
-      .achievement-info {
-        display: flex;
-        flex-direction: column;
-      }
-      
-      .achievement-title {
-        font-size: 12px;
-        color: #ffd700;
-        font-weight: bold;
-      }
-      
-      .achievement-name {
-        font-size: 16px;
-        color: white;
-        font-weight: bold;
-      }
-      
-      .achievement-desc {
-        font-size: 11px;
-        color: #888;
-      }
+      .achievement-toast-icon { font-size: 40px; }
+      .achievement-toast-info { display: flex; flex-direction: column; }
+      .achievement-toast-title { font-size: 11px; color: #ffd700; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+      .achievement-toast-name { font-size: 16px; color: white; font-weight: bold; }
+      .achievement-toast-desc { font-size: 11px; color: #aaa; }
     `;
     document.head.appendChild(style);
   };
 
-  // Инициализация
   loadUnlocked();
-  addNotificationStyles();
+  addStyles();
 
   return {
     achievements,
     checkAchievements,
-    getAchievements,
+    getUnlockedCount,
+    getTotalCount,
+    getProgress,
     resetAchievements
   };
 }

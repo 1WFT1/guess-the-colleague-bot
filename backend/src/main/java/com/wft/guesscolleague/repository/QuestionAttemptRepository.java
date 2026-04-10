@@ -2,6 +2,7 @@ package com.wft.guesscolleague.repository;
 
 import com.wft.guesscolleague.model.QuestionAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -56,4 +57,8 @@ public interface QuestionAttemptRepository extends JpaRepository<QuestionAttempt
      */
     @Query("SELECT qa FROM QuestionAttempt qa WHERE qa.session.id = :sessionId ORDER BY qa.createdAt DESC")
     List<QuestionAttempt> findBySessionIdOrderByCreatedAtDesc(@Param("sessionId") UUID sessionId);
+
+    @Modifying
+    @Query("DELETE FROM QuestionAttempt q WHERE q.createdAt < :date")
+    int deleteOldAttempts(@Param("date") LocalDateTime date);
 }

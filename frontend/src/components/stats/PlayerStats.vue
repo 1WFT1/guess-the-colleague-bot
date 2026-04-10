@@ -10,22 +10,10 @@
       <div class="stats-body">
         <!-- Основная статистика -->
         <div class="stats-summary">
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStore.score }}</div>
-            <div class="stat-label">Всего очков</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStore.accuracy }}%</div>
-            <div class="stat-label">Точность</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStore.totalQuestions }}</div>
-            <div class="stat-label">Вопросов</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ gameStore.bestStreak }}</div>
-            <div class="stat-label">Лучшая серия</div>
-          </div>
+          <div class="stat-card"><div class="stat-value">{{ gameStore.score }}</div><div class="stat-label">Всего очков</div></div>
+          <div class="stat-card"><div class="stat-value">{{ gameStore.accuracy }}%</div><div class="stat-label">Точность</div></div>
+          <div class="stat-card"><div class="stat-value">{{ gameStore.totalQuestions }}</div><div class="stat-label">Вопросов</div></div>
+          <div class="stat-card"><div class="stat-value">{{ gameStore.bestStreak }}</div><div class="stat-label">Лучшая серия</div></div>
         </div>
         
         <!-- Детальная статистика -->
@@ -33,31 +21,30 @@
           <div class="details-card">
             <h4>📈 Детальная статистика</h4>
             <div class="details-grid">
-              <div class="detail-item">
-                <span class="detail-label">Всего вопросов:</span>
-                <span class="detail-value">{{ gameStore.totalQuestions }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Правильных:</span>
-                <span class="detail-value correct">{{ gameStore.correctCount }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Неправильных:</span>
-                <span class="detail-value wrong">{{ gameStore.wrongCount }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Соотношение:</span>
-                <span class="detail-value">{{ getRatio }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Текущая серия:</span>
-                <span class="detail-value streak">{{ gameStore.currentStreak }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Рекордная серия:</span>
-                <span class="detail-value streak-best">{{ gameStore.bestStreak }}</span>
-              </div>
+              <div class="detail-item"><span class="detail-label">Всего вопросов:</span><span class="detail-value">{{ gameStore.totalQuestions }}</span></div>
+              <div class="detail-item"><span class="detail-label">Правильных:</span><span class="detail-value correct">{{ gameStore.correctCount }}</span></div>
+              <div class="detail-item"><span class="detail-label">Неправильных:</span><span class="detail-value wrong">{{ gameStore.wrongCount }}</span></div>
+              <div class="detail-item"><span class="detail-label">Соотношение:</span><span class="detail-value">{{ getRatio }}</span></div>
+              <div class="detail-item"><span class="detail-label">Текущая серия:</span><span class="detail-value streak">{{ gameStore.currentStreak }}</span></div>
+              <div class="detail-item"><span class="detail-label">Рекордная серия:</span><span class="detail-value streak-best">{{ gameStore.bestStreak }}</span></div>
             </div>
+          </div>
+        </div>
+        
+        <!-- Достижения -->
+        <div class="achievements-section">
+          <h4>🏅 Достижения ({{ achievements.getUnlockedCount() }}/{{ achievements.getTotalCount() }})</h4>
+          <div class="achievements-grid">
+            <div v-for="ach in achievements.achievements.value" :key="ach.id" 
+                 class="achievement-card" :class="{ unlocked: ach.unlocked }">
+              <div class="achievement-icon">{{ ach.icon }}</div>
+              <div class="achievement-name">{{ ach.name }}</div>
+              <div class="achievement-desc">{{ ach.description }}</div>
+            </div>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-label">Прогресс: {{ achievements.getProgress() }}%</div>
+            <div class="progress-bar"><div class="progress-fill" :style="{ width: achievements.getProgress() + '%' }"></div></div>
           </div>
         </div>
       </div>
@@ -72,22 +59,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useGameStore } from '../stores/game';
+import { computed, onMounted, watch } from 'vue';
+import { GameStore } from '../../stores/game';
+import { useAchievements } from '../../composables/useAchievements';
 
-const emit = defineEmits<{
-  close: [];
-  play: [];
-  'show-leaderboard': [];
-}>();
-
-const gameStore = useGameStore();
+const emit = defineEmits<{ close: []; play: []; 'show-leaderboard': [] }>();
+const gameStore = GameStore();
+const achievements = useAchievements();
 
 const getRatio = computed(() => {
   const total = gameStore.totalQuestions;
   if (total === 0) return '0%';
-  const ratio = (gameStore.correctCount / total) * 100;
-  return `${ratio.toFixed(1)}%`;
+  return `${((gameStore.correctCount / total) * 100).toFixed(1)}%`;
 });
 
 const canReset = computed(() => {
@@ -97,8 +80,18 @@ const canReset = computed(() => {
 const resetStats = async () => {
   if (confirm('Вы уверены, что хотите сбросить ВСЮ статистику?\n\nБудут сброшены:\n- Все очки\n- Правильные/неправильные ответы\n- Серии\n\nЭто действие нельзя отменить!')) {
     await gameStore.resetStats();
+    achievements.resetAchievements();
   }
 };
+
+// Проверяем достижения при изменении статистики
+watch([() => gameStore.score, () => gameStore.correctCount, () => gameStore.bestStreak, () => gameStore.totalQuestions], () => {
+  achievements.checkAchievements(gameStore);
+}, { immediate: true });
+
+onMounted(() => {
+  achievements.checkAchievements(gameStore);
+});
 </script>
 
 <style scoped>
@@ -291,4 +284,50 @@ const resetStats = async () => {
     grid-template-columns: 1fr;
   }
 }
+
+.achievements-section {
+  margin-top: 25px;
+  background: #2a2a2a;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #3a3a3a;
+}
+
+.achievements-section h4 {
+  color: white;
+  margin: 0 0 15px 0;
+  font-size: 16px;
+}
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.achievement-card {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  opacity: 0.4;
+  transition: all 0.3s;
+  border: 1px solid #3a3a3a;
+}
+
+.achievement-card.unlocked {
+  opacity: 1;
+  background: linear-gradient(135deg, #1a2a3a 0%, #2a2a2a 100%);
+  border-color: #ffd700;
+}
+
+.achievement-icon { font-size: 32px; margin-bottom: 8px; }
+.achievement-name { font-size: 14px; font-weight: bold; color: white; margin-bottom: 4px; }
+.achievement-desc { font-size: 10px; color: #888; }
+
+.progress-bar-container { margin-top: 15px; }
+.progress-label { font-size: 12px; color: #888; margin-bottom: 5px; }
+.progress-bar { height: 6px; background: #3a3a3a; border-radius: 10px; overflow: hidden; }
+.progress-fill { height: 100%; background: #ffd700; border-radius: 10px; transition: width 0.3s; }
 </style>

@@ -3,6 +3,7 @@ export interface Question {
   questionId: string;
   photoUrl: string | null;
   options: string[];
+  mode?: 'name' | 'department';
 }
 
 export interface AnswerRequest {

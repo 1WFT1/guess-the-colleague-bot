@@ -57,4 +57,10 @@ public class UserController {
         return ResponseEntity.ok(dtos);
     }
 
+    @PostMapping("/reset-games-played")
+    public ResponseEntity<?> resetGamesPlayed(@RequestParam Long userId) {
+        log.info("Resetting games played for user: {}", userId);
+        telegramUserService.resetGamesPlayed(userId);
+        return ResponseEntity.ok().build();
+    }
 }

@@ -1,11 +1,15 @@
 <template>
   <div class="admin-view">
-    <AdminPanel @close="$router.push('/')" />
+    <AdminPanel @close="goBack" />
   </div>
 </template>
 
 <script setup lang="ts">
-import AdminPanel from '../components/AdminPanel.vue';
+import { useRouter } from 'vue-router';
+import AdminPanel from '../components/admin/AdminPanel.vue';
+
+const router = useRouter();
+const goBack = () => router.push('/');
 </script>
 
 <style scoped>

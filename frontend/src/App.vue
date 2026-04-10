@@ -1,12 +1,12 @@
 <template>
   <div id="app">
-    <GameView />
+    <MenuView />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import GameView from './views/GameView.vue';
+import MenuView from './views/MenuView.vue';
 
 onMounted(() => {
   // Настройка Telegram WebApp

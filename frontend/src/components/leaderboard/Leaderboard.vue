@@ -70,9 +70,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import Mascot from './Mascot.vue';
-import { getInitials } from '../utils/formatters';
-import gameApi from '../api/game';
+import Mascot from './../common/Mascot.vue';
+import { getInitials } from '../../utils/formatters';
+import gameApi from '../../api/game';
 
 interface LeaderboardPlayer {
   telegramId: number;

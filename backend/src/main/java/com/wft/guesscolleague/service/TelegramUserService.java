@@ -158,4 +158,10 @@ public class TelegramUserService {
         return userRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
+
+    @Transactional
+    public void resetGamesPlayed(Long telegramId) {
+        userRepository.resetGamesPlayed(telegramId);
+        log.info("Reset games played for user: {}", telegramId);
+    }
 }

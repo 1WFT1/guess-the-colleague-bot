@@ -1,8 +1,7 @@
-<!-- components/AdminPanel.vue -->
 <template>
   <div class="admin-panel">
     <div class="admin-header">
-      <h2>⚙️ Админ-панель Угадай коллегу</h2>
+      <h2>⚙️ Админ-панель</h2>
       <button @click="$emit('close')" class="close-btn">✕</button>
     </div>
     
@@ -11,22 +10,27 @@
       <div class="section">
         <div class="section-header">
           <h3>Управление сотрудниками</h3>
-          <div class="actions">
+          <div class="actions">            
             <label class="btn btn-secondary file-label">
-            📁 Загрузить CSV
+              📁 Загрузить CSV
+              <input type="file" accept=".csv" style="display: none" @change="handleFileUpload" />
+            </label>
+            <button @click="openAddModal" class="btn btn-primary">➕ Добавить сотрудника</button>
+            <button @click="exportData" class="btn btn-secondary">📤 Экспорт</button>
+          </div>
+        </div>
+
+        <!-- Поиск под кнопками -->
+        <div class="search-container">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
             <input 
-              type="file" 
-              accept=".csv" 
-              style="display: none" 
-              @change="handleFileUpload"
+              type="text" 
+              v-model="searchQuery" 
+              placeholder="Поиск по ФИО или отделу..."
+              class="search-input"
             />
-          </label>
-            <button @click="openAddModal" class="btn btn-primary">
-              ➕ Добавить сотрудника
-            </button>
-            <button @click="exportData" class="btn btn-secondary">
-              📤 Экспорт
-            </button>
+            <button v-if="searchQuery" @click="clearSearch" class="search-clear">✕</button>
           </div>
         </div>
         
@@ -43,30 +47,27 @@
               </tr>
             </thead>
             <tbody>
+              <tr v-if="filteredEmployees.length === 0">
+                <td colspan="6" class="empty-row">👨‍💼 Сотрудники не найдены</td>
+              </tr>
               <tr v-for="employee in paginatedEmployees" :key="employee.id">
                 <td class="id-cell" :title="String(employee.id)">
                   {{ formatId(employee.id) }}
                 </td>
                 <td class="name-cell">{{ employee.fullName }}</td>
-                <td class="dept-cell">{{ employee.department }}</td>
+                <td class="dept-cell">{{ employee.department || '—' }}</td>
                 <td class="photo-cell">
                   <span v-if="employee.photoUrl" class="status-icon success">☑️</span>
                   <span v-else class="status-icon error">❌</span>
                 </td>
                 <td class="active-cell">
                   <label class="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      :checked="employee.active" 
-                      @change="toggleActive(employee.id)"
-                    />
+                    <input type="checkbox" :checked="employee.active" @change="toggleActive(employee.id)" />
                     <span class="toggle-slider"></span>
                   </label>
                 </td>
                 <td class="actions-cell">
-                  <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
-                    ✏️
-                  </button>
+                  <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">✏️</button>
                 </td>
               </tr>
             </tbody>
@@ -74,23 +75,12 @@
         </div>
         
         <div class="pagination">
-          <button 
-            @click="prevPage" 
-            :disabled="currentPage === 1" 
-            class="page-btn"
-          >
-            ‹
-          </button>
-          <span class="page-info">
-            Страница {{ currentPage }} из {{ totalPages }}
-          </span>
-          <button 
-            @click="nextPage" 
-            :disabled="currentPage === totalPages" 
-            class="page-btn"
-          >
-            ›
-          </button>
+          <button @click="prevPage" :disabled="currentPage === 1" class="page-btn">‹</button>
+          <span class="page-info">Страница {{ currentPage }} из {{ totalPages }}</span>
+          <button @click="nextPage" :disabled="currentPage === totalPages" class="page-btn">›</button>
+        </div>
+        <div class="pagination-info">
+          Показано {{ paginatedEmployees.length }} из {{ filteredEmployees.length }} сотрудников
         </div>
       </div>
       
@@ -98,50 +88,22 @@
       <div class="section">
         <div class="section-header">
           <h3>Статистика игры</h3>
-          <button @click="refreshStats" class="btn btn-secondary">
-            🔄 Обновить
-          </button>
+          <button @click="refreshStats" class="btn btn-secondary">🔄 Обновить</button>
         </div>
         
-        <div v-if="adminStats.isLoading.value" class="loading">
-          Загрузка статистики...
-        </div>
-        
+        <div v-if="adminStats.isLoading.value" class="loading">Загрузка статистики...</div>
         <div v-else class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-value">{{ adminStats.stats.value.totalPlayers }}</div>
-              <div class="stat-label">Всего игроков</div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-value">{{ adminStats.stats.value.activeToday }}</div>
-              <div class="stat-label">Активных сегодня</div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-value">{{ adminStats.stats.value.totalQuestions }}</div>
-              <div class="stat-label">Всего вопросов</div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-value">{{ adminStats.stats.value.averageScore }}</div>
-              <div class="stat-label">Средний балл</div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-value">{{ adminStats.stats.value.totalGames }}</div>
-              <div class="stat-label">Всего игр</div>
-            </div>
-            
-            <div v-if="adminStats.stats.value.topPlayer" class="stat-card">
-              <div class="stat-value">{{ adminStats.stats.value.topPlayer.name }}</div>
-              <div class="stat-label">Лучший игрок ({{ adminStats.stats.value.topPlayer.score }} очков)</div>
-            </div>
-          </div>
+          <div class="stat-card"><div class="stat-value">{{ adminStats.stats.value.totalPlayers }}</div><div class="stat-label">Всего игроков</div></div>
+          <div class="stat-card"><div class="stat-value">{{ adminStats.stats.value.activeToday }}</div><div class="stat-label">Активных сегодня</div></div>
+          <div class="stat-card"><div class="stat-value">{{ adminStats.stats.value.totalQuestions }}</div><div class="stat-label">Всего вопросов</div></div>
+          <div class="stat-card"><div class="stat-value">{{ adminStats.stats.value.averageScore }}</div><div class="stat-label">Средний балл</div></div>
+          <div class="stat-card"><div class="stat-value">{{ adminStats.stats.value.totalGames }}</div><div class="stat-label">Всего игр</div></div>
+          <div v-if="adminStats.stats.value.topPlayer" class="stat-card"><div class="stat-value">{{ adminStats.stats.value.topPlayer.name }}</div><div class="stat-label">Лучший игрок ({{ adminStats.stats.value.topPlayer.score }} очков)</div></div>
+        </div>
       </div>
     </div>
 
-    <!-- Модальное окно -->
+    <!-- Модальное окно (остается без изменений) -->
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content">
         <div class="modal-header">
@@ -152,12 +114,7 @@
         <div class="modal-body">
           <div class="form-group">
             <label>ФИО *</label>
-            <input 
-              v-model="formData.fullName" 
-              type="text" 
-              placeholder="Введите ФИО сотрудника"
-              class="form-input"
-            />
+            <input v-model="formData.fullName" type="text" placeholder="Введите ФИО сотрудника" class="form-input" />
           </div>
           
           <div class="form-group">
@@ -176,12 +133,7 @@
           
           <div class="form-group">
             <label>Фото (URL)</label>
-            <input 
-              v-model="formData.photoUrl" 
-              type="text" 
-              placeholder="https://example.com/photo.jpg"
-              class="form-input"
-            />
+            <input v-model="formData.photoUrl" type="text" placeholder="https://example.com/photo.jpg" class="form-input" />
           </div>
           
           <div class="form-group">
@@ -199,9 +151,7 @@
         
         <div class="modal-footer">
           <button @click="closeModal" class="btn-cancel">Отмена</button>
-          <button @click="saveEmployee" class="btn-save">
-            {{ isEditing ? 'Сохранить' : 'Добавить' }}
-          </button>
+          <button @click="saveEmployee" class="btn-save">{{ isEditing ? 'Сохранить' : 'Добавить' }}</button>
         </div>
       </div>
     </div>
@@ -210,9 +160,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useEmployeesApi } from '../composables/useEmployeesApi';
-import { useAdminStats } from '../composables/useAdminStats';
-import type { Employee, EmployeeForm } from '../types/game';
+import { useEmployeesApi } from '../../composables/useEmployeesApi';
+import { useAdminStats } from '../../composables/useAdminStats';
+import type { Employee, EmployeeForm } from '../../types/game';
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -226,6 +176,7 @@ const showModal = ref(false);
 const isEditing = ref(false);
 const editingId = ref<number | null>(null);
 const isLoading = ref(false);
+const searchQuery = ref('');
 
 const formData = ref<EmployeeForm>({
   fullName: '',
@@ -234,13 +185,37 @@ const formData = ref<EmployeeForm>({
   active: true
 });
 
+// Фильтрация сотрудников по поиску
+const filteredEmployees = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return sortedEmployees.value;
+  }
+  const query = searchQuery.value.toLowerCase().trim();
+  return sortedEmployees.value.filter(emp => 
+    emp.fullName.toLowerCase().includes(query) ||
+    (emp.department && emp.department.toLowerCase().includes(query))
+  );
+});
+
+const sortedEmployees = computed(() => {
+  return [...employees.value].sort((a, b) => {
+    if (a.active === b.active) return 0;
+    return a.active ? -1 : 1;
+  });
+});
+
 const paginatedEmployees = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
-  return sortedEmployees.value.slice(start, end);
+  return filteredEmployees.value.slice(start, end);
 });
 
-const totalPages = computed(() => Math.ceil(sortedEmployees.value.length / itemsPerPage));
+const totalPages = computed(() => Math.ceil(filteredEmployees.value.length / itemsPerPage));
+
+const clearSearch = () => {
+  searchQuery.value = '';
+  currentPage.value = 1;
+};
 
 const formatId = (id: number): string => {
   return String(id).substring(0, 8) + '...';
@@ -254,37 +229,24 @@ const nextPage = () => {
   if (currentPage.value < totalPages.value) currentPage.value++;
 };
 
-const sortedEmployees = computed(() => {
-  return [...employees.value].sort((a, b) => {
-    // Сначала активные (true), потом неактивные (false)
-    if (a.active === b.active) return 0;
-    return a.active ? -1 : 1;
-  });
-});
-
 // Загрузка CSV файла
 const handleFileUpload = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
-  
   if (!file) return;
-  
   if (!file.name.endsWith('.csv')) {
     alert('Пожалуйста, выберите CSV файл');
     return;
   }
   
   isLoading.value = true;
-  
   try {
     const formData = new FormData();
     formData.append('file', file);
-    
     const response = await fetch('http://localhost:8080/api/employees/upload-csv', {
       method: 'POST',
       body: formData
     });
-    
     if (response.ok) {
       alert('Сотрудники успешно загружены');
       await loadEmployees();
@@ -297,26 +259,22 @@ const handleFileUpload = async (event: Event) => {
     alert('Ошибка при загрузке файла');
   } finally {
     isLoading.value = false;
-    input.value = ''; // очищаем input
+    input.value = '';
   }
 };
 
 // Экспорт данных
 const exportData = () => {
-  // Формируем CSV данные
   const headers = ['ФИО', 'Отдел', 'Фото URL'];
-  const rows = employees.value.map(emp => [
+  const rows = filteredEmployees.value.map(emp => [
     emp.fullName,
     emp.department,
     emp.photoUrl
   ]);
-  
   const csvContent = [
     headers.join(','),
     ...rows.map(row => row.map(cell => `"${cell || ''}"`).join(','))
   ].join('\n');
-  
-  // Добавляем BOM для поддержки UTF-8
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -333,36 +291,7 @@ const loadEmployees = async () => {
 };
 
 const refreshStats = () => {
-  cleanOldPlayerStats();
   adminStats.refresh();
-};
-
-const cleanOldPlayerStats = () => {
-  const allPlayersKey = 'guess_colleague_all_players_v1';
-  const saved = localStorage.getItem(allPlayersKey);
-  
-  if (saved) {
-    try {
-      const allPlayers = JSON.parse(saved);
-      // Оставляем только уникальных игроков (по userId)
-      const uniquePlayers = new Map();
-      allPlayers.forEach((player: any) => {
-        if (player.userId) {
-          // Если есть несколько записей одного игрока, берем последнюю
-          const existing = uniquePlayers.get(player.userId);
-          if (!existing || new Date(player.lastUpdated) > new Date(existing.lastUpdated)) {
-            uniquePlayers.set(player.userId, player);
-          }
-        }
-      });
-      
-      const cleanedPlayers = Array.from(uniquePlayers.values());
-      localStorage.setItem(allPlayersKey, JSON.stringify(cleanedPlayers));
-      console.log(`Cleaned player stats: ${allPlayers.length} -> ${cleanedPlayers.length}`);
-    } catch (e) {
-      console.error('Failed to clean player stats:', e);
-    }
-  }
 };
 
 const openAddModal = () => {
@@ -396,11 +325,6 @@ const closeModal = () => {
 };
 
 const saveEmployee = async () => {
-  console.log('🚀 saveEmployee called');
-  console.log('📋 formData.value:', formData.value);
-  console.log('📋 isEditing:', isEditing.value);
-  console.log('📋 editingId:', editingId.value);
-  
   if (!formData.value.fullName.trim()) {
     alert('Введите ФИО сотрудника');
     return;
@@ -413,24 +337,32 @@ const saveEmployee = async () => {
     active: formData.value.active === true
   };
   
-  console.log('📤 Sending payload:', payload);
-  
   try {
     if (isEditing.value && editingId.value !== null) {
-      console.log('✏️ Updating employee:', editingId.value);
       await employeesApi.update(editingId.value, payload);
       alert('Сотрудник обновлен');
     } else {
-      console.log('➕ Creating new employee');
       await employeesApi.create(payload);
       alert('Сотрудник добавлен');
     }
     await loadEmployees();
     closeModal();
   } catch (error: any) {
-    console.error('❌ Error in saveEmployee:', error);
-    console.error('❌ Error response:', error.response);
+    console.error('Ошибка сохранения:', error);
     alert('Ошибка при сохранении');
+  }
+};
+
+const deleteEmployee = async (id: number) => {
+  if (confirm('Вы уверены, что хотите удалить этого сотрудника?')) {
+    try {
+      await employeesApi.delete(id);
+      await loadEmployees();
+      alert('Сотрудник удален');
+    } catch (error) {
+      console.error('Ошибка удаления:', error);
+      alert('Ошибка при удалении');
+    }
   }
 };
 
@@ -440,7 +372,7 @@ const toggleActive = async (id: number) => {
     try {
       const newStatus = !employee.active;
       await employeesApi.toggleActive(id, newStatus);
-      employee.active = newStatus;  // <-- active, а не isActive
+      employee.active = newStatus;
       await loadEmployees();
     } catch (error) {
       console.error('Ошибка изменения статуса:', error);
@@ -460,6 +392,96 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Стили для поиска под кнопками */
+.search-container {
+  margin-bottom: 20px;
+}
+
+.search-box {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: #888;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 30px 10px 35px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  color: white;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #4f4ff4;
+  background: #1a1a1a;
+}
+
+.search-input::placeholder {
+  color: #666;
+}
+
+.search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+.search-clear:hover {
+  color: white;
+}
+
+.empty-row {
+  text-align: center;
+  padding: 40px !important;
+  color: #888;
+}
+
+.pagination-info {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Остальные стили */
+.file-label {
+  cursor: pointer;
+  display: inline-block;
+}
+
+.file-label:hover {
+  opacity: 0.9;
+}
+
+/* Остальные стили остаются без изменений */
+.file-label {
+  cursor: pointer;
+  display: inline-block;
+}
+
+.file-label:hover {
+  opacity: 0.9;
+}
 /* Добавьте стиль для кнопки-файла */
 .file-label {
   cursor: pointer;

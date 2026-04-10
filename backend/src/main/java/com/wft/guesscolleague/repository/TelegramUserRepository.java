@@ -55,4 +55,9 @@ public interface TelegramUserRepository extends JpaRepository<TelegramUser, UUID
 
     @Query("SELECT COUNT(u) FROM TelegramUser u WHERE u.lastActive > :since")
     long countActiveSince(@Param("since") LocalDateTime since);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE TelegramUser u SET u.gamesPlayed = 0 WHERE u.telegramId = :telegramId")
+    void resetGamesPlayed(@Param("telegramId") Long telegramId);
 }

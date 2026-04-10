@@ -120,4 +120,10 @@ public class GameSession {
 
     @Column(name = "best_streak")
     private int bestStreak = 0;
+
+    @Column(name = "current_question_type")
+    private String currentQuestionType;
+
+    @Column(name = "game_mode")
+    private String gameMode = "name";
 }

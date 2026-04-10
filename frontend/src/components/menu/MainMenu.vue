@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import Mascot from './Mascot.vue';
+import Mascot from './../common/Mascot.vue';
 
 const props = defineProps<{
   isAdmin?: boolean;

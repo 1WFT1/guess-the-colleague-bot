@@ -11,10 +11,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useGameStore } from '../stores/game';
-import PlayerStats from '../components/PlayerStats.vue';
+import { GameStore } from '../stores/game';
+import PlayerStats from '../components/stats/PlayerStats.vue';
 
-const gameStore = useGameStore();
+const gameStore = GameStore();
 
 const playerStats = computed(() => ({
   totalScore: gameStore.score,

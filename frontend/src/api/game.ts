@@ -1,7 +1,8 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type { Question, AnswerResponse, LeaderboardData } from '../types/game';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080/api';
 
 class GameApi {
   private api: AxiosInstance;
@@ -18,6 +19,11 @@ class GameApi {
     this.setupInterceptors();
   }
   
+  async updateGameMode(sessionId: string, gameMode: string): Promise<void> {
+    const response = await this.api.patch(`/game/session/${sessionId}/mode?gameMode=${gameMode}`);
+    return response.data;
+  }
+
   private setupInterceptors() {
     this.api.interceptors.request.use(
       (config) => {
@@ -50,13 +56,18 @@ class GameApi {
       }
     );
   }
-  
-  async createSession(userId: number, chatId?: number): Promise<string> {
-    const response = await this.api.post<string>(
-      `/game/session?userId=${userId}&chatId=${chatId || userId}`
-    );
+
+  async resetGamesPlayed(userId: number): Promise<void> {
+    const response = await this.api.post(`/user/reset-games-played?userId=${userId}`);
     return response.data;
   }
+  
+ async createSession(userId: number, chatId?: number, gameMode?: 'name' | 'department'): Promise<string> {
+  const response = await this.api.post<string>(
+    `/game/session?userId=${userId}&chatId=${chatId || userId}&gameMode=${gameMode || 'name'}`
+  );
+  return response.data;
+}
   
   async getNextQuestion(sessionId: string): Promise<Question> {
     const response = await this.api.get<Question>(`/game/next-question?sessionId=${sessionId}`);

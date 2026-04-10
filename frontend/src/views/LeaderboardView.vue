@@ -11,10 +11,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useGameStore } from '../stores/game';
-import Leaderboard from '../components/Leaderboard.vue';
+import { GameStore } from '../stores/game';
+import Leaderboard from '../components/leaderboard/Leaderboard.vue';
 
-const gameStore = useGameStore();
+const gameStore = GameStore();
 const currentUserId = computed(() => gameStore.userId ?? 0);
 </script>
 

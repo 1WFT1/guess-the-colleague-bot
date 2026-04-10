@@ -42,15 +42,14 @@ public class GameController {
             @RequestParam(required = false) Long chatId,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String firstName,
-            @RequestParam(required = false) String lastName) {
+            @RequestParam(required = false) String lastName,
+            @RequestParam(required = false, defaultValue = "name") String gameMode) {
 
-        log.info("Creating session for user: {} (username: {}, firstName: {}, lastName: {})",
-                userId, username, firstName, lastName);
+        log.info("Creating session for user: {} with gameMode: {}", userId, gameMode);
 
-        // Регистрируем пользователя с полученными данными
         telegramUserService.registerOrUpdateUser(userId, username, firstName, lastName);
 
-        UUID sessionId = gameService.createSession(userId, chatId).getId();
+        UUID sessionId = gameService.createSession(userId, chatId, gameMode).getId();
         return ResponseEntity.ok(sessionId);
     }
 
@@ -133,5 +132,12 @@ public class GameController {
         TelegramUser user = telegramUserService.getUserStats(userId);
 
         return ResponseEntity.ok(new UserStatsDTO(user));
+    }
+
+    @PatchMapping("/session/{sessionId}/mode")
+    public ResponseEntity<?> updateGameMode(@PathVariable UUID sessionId, @RequestParam String gameMode) {
+        log.info("Updating game mode for session: {} to {}", sessionId, gameMode);
+        gameService.updateGameMode(sessionId, gameMode);
+        return ResponseEntity.ok().build();
     }
 }
