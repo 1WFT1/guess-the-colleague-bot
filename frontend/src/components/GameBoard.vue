@@ -506,13 +506,14 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   z-index: 1000;
-  padding-top: 200px;
-  pointer-events: none;
+  padding-top: 150px;
+  animation: fadeIn 0.2s ease;
+  pointer-events: auto;
 }
 
 .feedback-card {
@@ -521,14 +522,28 @@ onUnmounted(() => {
   border-radius: 20px;
   text-align: center;
   max-width: 320px;
-  animation: slideDownFade 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+  animation: slideIn 0.3s ease;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-  pointer-events: auto;
 }
 
-@keyframes slideDownFade {
-  0% { opacity: 0; transform: translateY(-60px) scale(0.9); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .feedback-card.correct {
@@ -540,7 +555,6 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
   color: white;
 }
-
 .feedback-title {
   font-size: 24px;
   font-weight: bold;

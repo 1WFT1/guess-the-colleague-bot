@@ -12,9 +12,15 @@
         <div class="section-header">
           <h3>Управление сотрудниками</h3>
           <div class="actions">
-            <button @click="uploadCSV" class="btn btn-secondary">
-              📁 Загрузить CSV
-            </button>
+            <label class="btn btn-secondary file-label">
+            📁 Загрузить CSV
+            <input 
+              type="file" 
+              accept=".csv" 
+              style="display: none" 
+              @change="handleFileUpload"
+            />
+          </label>
             <button @click="openAddModal" class="btn btn-primary">
               ➕ Добавить сотрудника
             </button>
@@ -51,7 +57,7 @@
                   <label class="toggle-switch">
                     <input 
                       type="checkbox" 
-                      :checked="employee.isActive" 
+                      :checked="employee.active" 
                       @change="toggleActive(employee.id)"
                     />
                     <span class="toggle-slider"></span>
@@ -60,9 +66,6 @@
                 <td class="actions-cell">
                   <button @click="editEmployee(employee)" class="edit-btn" title="Редактировать">
                     ✏️
-                  </button>
-                  <button @click="deleteEmployee(employee.id)" class="delete-btn" title="Удалить">
-                    🗑️
                   </button>
                 </td>
               </tr>
@@ -183,7 +186,7 @@
           
           <div class="form-group">
             <label class="checkbox-label">
-              <input type="checkbox" v-model="formData.isActive" />
+              <input type="checkbox" v-model="formData.active" />
               <span>Активен</span>
             </label>
           </div>
@@ -222,21 +225,22 @@ const itemsPerPage = 5;
 const showModal = ref(false);
 const isEditing = ref(false);
 const editingId = ref<number | null>(null);
+const isLoading = ref(false);
 
 const formData = ref<EmployeeForm>({
   fullName: '',
   department: '',
   photoUrl: '',
-  isActive: true
+  active: true
 });
 
 const paginatedEmployees = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
-  return employees.value.slice(start, end);
+  return sortedEmployees.value.slice(start, end);
 });
 
-const totalPages = computed(() => Math.ceil(employees.value.length / itemsPerPage));
+const totalPages = computed(() => Math.ceil(sortedEmployees.value.length / itemsPerPage));
 
 const formatId = (id: number): string => {
   return String(id).substring(0, 8) + '...';
@@ -250,9 +254,81 @@ const nextPage = () => {
   if (currentPage.value < totalPages.value) currentPage.value++;
 };
 
+const sortedEmployees = computed(() => {
+  return [...employees.value].sort((a, b) => {
+    // Сначала активные (true), потом неактивные (false)
+    if (a.active === b.active) return 0;
+    return a.active ? -1 : 1;
+  });
+});
+
+// Загрузка CSV файла
+const handleFileUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  
+  if (!file) return;
+  
+  if (!file.name.endsWith('.csv')) {
+    alert('Пожалуйста, выберите CSV файл');
+    return;
+  }
+  
+  isLoading.value = true;
+  
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch('http://localhost:8080/api/employees/upload-csv', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (response.ok) {
+      alert('Сотрудники успешно загружены');
+      await loadEmployees();
+    } else {
+      const error = await response.text();
+      alert('Ошибка загрузки: ' + error);
+    }
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert('Ошибка при загрузке файла');
+  } finally {
+    isLoading.value = false;
+    input.value = ''; // очищаем input
+  }
+};
+
+// Экспорт данных
+const exportData = () => {
+  // Формируем CSV данные
+  const headers = ['ФИО', 'Отдел', 'Фото URL'];
+  const rows = employees.value.map(emp => [
+    emp.fullName,
+    emp.department,
+    emp.photoUrl
+  ]);
+  
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell || ''}"`).join(','))
+  ].join('\n');
+  
+  // Добавляем BOM для поддержки UTF-8
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `employees_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  alert('Данные экспортированы');
+};
+
 const loadEmployees = async () => {
   employees.value = await employeesApi.getAll();
-  cleanOldPlayerStats();
   adminStats.updateFromEmployees(employees.value);
 };
 
@@ -296,7 +372,7 @@ const openAddModal = () => {
     fullName: '',
     department: '',
     photoUrl: '',
-    isActive: true
+    active: true
   };
   showModal.value = true;
 };
@@ -308,7 +384,7 @@ const editEmployee = (employee: Employee) => {
     fullName: employee.fullName,
     department: employee.department,
     photoUrl: employee.photoUrl,
-    isActive: employee.isActive
+    active: employee.active
   };
   showModal.value = true;
 };
@@ -320,37 +396,41 @@ const closeModal = () => {
 };
 
 const saveEmployee = async () => {
+  console.log('🚀 saveEmployee called');
+  console.log('📋 formData.value:', formData.value);
+  console.log('📋 isEditing:', isEditing.value);
+  console.log('📋 editingId:', editingId.value);
+  
   if (!formData.value.fullName.trim()) {
     alert('Введите ФИО сотрудника');
     return;
   }
   
+  const payload = {
+    fullName: formData.value.fullName,
+    department: formData.value.department || '',
+    photoUrl: formData.value.photoUrl || '',
+    active: formData.value.active === true
+  };
+  
+  console.log('📤 Sending payload:', payload);
+  
   try {
     if (isEditing.value && editingId.value !== null) {
-      await employeesApi.update(editingId.value, formData.value);
+      console.log('✏️ Updating employee:', editingId.value);
+      await employeesApi.update(editingId.value, payload);
       alert('Сотрудник обновлен');
     } else {
-      await employeesApi.create(formData.value);
+      console.log('➕ Creating new employee');
+      await employeesApi.create(payload);
       alert('Сотрудник добавлен');
     }
     await loadEmployees();
     closeModal();
-  } catch (error) {
-    console.error('Ошибка сохранения:', error);
+  } catch (error: any) {
+    console.error('❌ Error in saveEmployee:', error);
+    console.error('❌ Error response:', error.response);
     alert('Ошибка при сохранении');
-  }
-};
-
-const deleteEmployee = async (id: number) => {
-  if (confirm('Вы уверены, что хотите удалить этого сотрудника?')) {
-    try {
-      await employeesApi.delete(id);
-      await loadEmployees();
-      alert('Сотрудник удален');
-    } catch (error) {
-      console.error('Ошибка удаления:', error);
-      alert('Ошибка при удалении');
-    }
   }
 };
 
@@ -358,28 +438,15 @@ const toggleActive = async (id: number) => {
   const employee = employees.value.find(e => e.id === id);
   if (employee) {
     try {
-      await employeesApi.toggleActive(id, !employee.isActive);
+      const newStatus = !employee.active;
+      await employeesApi.toggleActive(id, newStatus);
+      employee.active = newStatus;  // <-- active, а не isActive
       await loadEmployees();
     } catch (error) {
       console.error('Ошибка изменения статуса:', error);
       alert('Ошибка при изменении статуса');
     }
   }
-};
-
-const uploadCSV = () => {
-  alert('Загрузка CSV файла');
-};
-
-const exportData = () => {
-  const data = JSON.stringify(employees.value, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `employees_${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
 };
 
 const handleImageError = (event: Event) => {
@@ -391,6 +458,18 @@ onMounted(() => {
   loadEmployees();
 });
 </script>
+
+<style scoped>
+/* Добавьте стиль для кнопки-файла */
+.file-label {
+  cursor: pointer;
+  display: inline-block;
+}
+
+.file-label:hover {
+  opacity: 0.9;
+}
+</style>
 
 <style scoped>
 /* Стили остаются те же, что и в оригинале */
@@ -573,7 +652,7 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
   white-space: nowrap;
 }
 
-.edit-btn, .delete-btn {
+.edit-btn {
   background: none;
   border: none;
   font-size: 18px;
@@ -583,12 +662,13 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
   transition: all 0.2s;
   width: 32px;
   height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .edit-btn { color: #4caf50; }
 .edit-btn:hover { background: rgba(76, 175, 80, 0.2); transform: scale(1.1); }
-.delete-btn { color: #f44336; }
-.delete-btn:hover { background: rgba(244, 67, 54, 0.2); transform: scale(1.1); }
 
 .pagination {
   display: flex;
@@ -756,7 +836,7 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
 }
 
@@ -764,9 +844,20 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
   width: 18px;
   height: 18px;
   cursor: pointer;
+  margin: 0;
+  vertical-align: middle;
+  margin-right: 10px;
 }
 
-.checkbox-label span { color: #e0e0e0; }
+.checkbox-label span {
+  color: #e0e0e0;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-top: 4px;
+}
 
 .photo-preview {
   margin-top: 15px;

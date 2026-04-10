@@ -28,34 +28,34 @@ export const useGameStore = defineStore('game', () => {
 
   const totalQuestions = computed(() => correctCount.value + wrongCount.value);
 
-  // Загрузка статистики с бэкенда
-  const loadStatsFromBackend = async () => {
-    if (!userId.value) return false;
+const loadStatsFromBackend = async (telegramUserId?: number) => {
+  const targetUserId = telegramUserId || userId.value;
+  
+  if (!targetUserId) {
+    console.log('[Backend] No userId, skipping');
+    return false;
+  }
+  
+  try {
+    console.log('[Backend] Fetching stats for user:', targetUserId);
+    const stats = await gameApi.getUserStats(targetUserId);
+    console.log('[Backend] Received stats:', stats);
     
-    try {
-      console.log('[Backend] Fetching stats for user:', userId.value);
-      const stats = await gameApi.getUserStats(userId.value);
-      console.log('[Backend] Received stats:', stats);
-      
-      if (stats) {
-        score.value = stats.totalScore || 0;
-        correctCount.value = stats.correctAnswers || 0;
-        wrongCount.value = stats.wrongAnswers || 0;
-        currentStreak.value = stats.currentStreak || 0;
-        bestStreak.value = stats.bestStreak || 0;
-        console.log('[Backend] Stats loaded into store:', {
-          score: score.value,
-          accuracy: accuracy.value,
-          bestStreak: bestStreak.value
-        });
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('[Backend] Failed to load stats:', err);
-      return false;
+    if (stats && stats.totalScore !== undefined) {
+      score.value = stats.totalScore || 0;
+      correctCount.value = stats.correctAnswers || 0;
+      wrongCount.value = stats.wrongAnswers || 0;
+      currentStreak.value = stats.currentStreak || 0;
+      bestStreak.value = stats.bestStreak || 0;
+      console.log('[Backend] Stats loaded successfully');
+      return true;
     }
-  };
+    return false;
+  } catch (err) {
+    console.error('[Backend] Failed to load stats:', err);
+    return false;
+  }
+};
 
   // Сохранение статистики на бэкенд
   const saveStatsToBackend = async () => {
@@ -87,28 +87,26 @@ export const useGameStore = defineStore('game', () => {
   };
 
   // Public methods
-  const initGame = async (telegramUserId: number, telegramChatId?: number) => {
-    try {
-      isLoading.value = true;
-      error.value = null;
-      userId.value = telegramUserId;
-      
-      console.log('[DEBUG] API URL:', import.meta.env.VITE_API_URL);
-      console.log('[DEBUG] Full URL:', `${import.meta.env.VITE_API_URL}/game/session?userId=${telegramUserId}`);
-      
-      await loadStatsFromBackend();
-      
-      const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
-      sessionId.value = id;
-      
-      await loadNextQuestion();
-    } catch (err) {
-      console.error('[DEBUG] Error:', err);
-      error.value = 'Не удалось создать игровую сессию. Проверьте подключение к серверу.';
-    } finally {
-      isLoading.value = false;
-    }
-  };
+const initGame = async (telegramUserId: number, telegramChatId?: number) => {
+  try {
+    isLoading.value = true;
+    error.value = null;
+    userId.value = telegramUserId;
+    
+    await loadStatsFromBackend(telegramUserId);
+    //recordDailyActivity();
+    
+    const id = await gameApi.createSession(telegramUserId, telegramChatId || telegramUserId);
+    sessionId.value = id;
+    
+    await loadNextQuestion();
+  } catch (err) {
+    error.value = 'Не удалось создать игровую сессию. Проверьте подключение к серверу.';
+    console.error('Init game error:', err);
+  } finally {
+    isLoading.value = false;
+  }
+};
 
   const loadNextQuestion = async () => {
     if (!sessionId.value) return;

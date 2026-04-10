@@ -1,12 +1,14 @@
 <template>
   <div class="game-view">
     <div class="game-container">
-      <div v-if="!isStatsLoaded" class="loading-screen">
+      <!-- Показываем загрузку, пока Telegram не готов или статистика не загружена -->
+      <div v-if="!telegramReady || !isStatsLoaded" class="loading-screen">
         <div class="loader"></div>
-        <p>Загрузка...</p>
-      </div>      
-      <!-- Главное меню -->
-      <div v-if="currentView === 'menu'" class="menu-wrapper">
+        <p>{{ !telegramReady ? 'Подключение к Telegram...' : 'Загрузка данных...' }}</p>
+      </div>
+      
+      <!-- Главное меню - показываем только когда всё готово -->
+      <div v-else-if="currentView === 'menu'" class="menu-wrapper">
         <div class="simple-menu">
           <div class="simple-menu-header">
             <h1 class="simple-title">Угадай коллегу</h1>
@@ -44,17 +46,16 @@
           
           <div class="simple-mascot">
             <img 
-              src="/public/assets/images/codic_start.png" 
+              src="/assets/images/codic_start.png" 
               alt="Маскот" 
               class="mascot-image"
-              @error="handleImageError"
             />
             <div class="mascot-message">Готов проверить свои знания о коллегах? Начни игру прямо сейчас!</div>
           </div>
         </div>
       </div>
       
-      <!-- Игровое поле -->
+      <!-- Остальные view без изменений -->
       <GameBoard 
         v-if="currentView === 'game'"
         :key="gameKey"
@@ -64,7 +65,6 @@
         @back-to-menu="handleBackToMenu"
       />
       
-      <!-- Лидерборд -->
       <Leaderboard
         v-if="currentView === 'leaderboard'"
         :currentUserId="userId"
@@ -73,7 +73,6 @@
         @show-stats="showStats"
       />
       
-      <!-- Статистика -->
       <PlayerStats
         v-if="currentView === 'stats'"
         @close="currentView = 'menu'"
@@ -81,7 +80,6 @@
         @show-leaderboard="showLeaderboard"
       />
       
-      <!-- Админ панель -->
       <AdminPanel
         v-if="currentView === 'admin'"
         @close="currentView = 'menu'"
@@ -91,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useGameStore } from '../stores/game';
 import { useTelegram } from '../composables/useTelegram';
 import GameBoard from '../components/GameBoard.vue';
@@ -99,39 +97,8 @@ import Leaderboard from '../components/Leaderboard.vue';
 import PlayerStats from '../components/PlayerStats.vue';
 import AdminPanel from '../components/AdminPanel.vue';
 
-const connectionStatus = ref<{ type: string; message: string } | null>(null);
-
-const showConnectionStatus = (type: 'error' | 'success' | 'info', message: string) => {
-  connectionStatus.value = { type, message };
-  setTimeout(() => {
-    connectionStatus.value = null;
-  }, 5000);
-};
-// Проверка подключения к бэкенду
-const checkBackendConnection = async () => {
-  showConnectionStatus('info', 'Проверка подключения к серверу...');
-  
-  try {
-    const apiUrl = 'https://b434ebb165dc5c64-178-68-29-212.serveousercontent.com/api';
-    const response = await fetch(`${apiUrl}/game/session?userId=${userId.value}&chatId=${chatId.value}`, {
-      method: 'POST'
-    });
-    
-    if (response.ok) {
-      showConnectionStatus('success', '✅ Подключение к серверу установлено');
-      return true;
-    } else {
-      showConnectionStatus('error', `❌ Ошибка сервера: ${response.status}`);
-      return false;
-    }
-  } catch (err: any) {
-    showConnectionStatus('error', `❌ Не удалось подключиться к серверу: ${err.message}`);
-    return false;
-  }
-};
-
 const gameStore = useGameStore();
-const { userId, isAdmin, userName } = useTelegram();
+const { userId, isAdmin, userName, ready: telegramReady } = useTelegram();
 
 const currentView = ref<'menu' | 'game' | 'leaderboard' | 'stats' | 'admin'>('menu');
 const chatId = ref(0);
@@ -139,54 +106,37 @@ const gameMode = ref<'name' | 'department'>('name');
 const gameKey = ref(0);
 const isStatsLoaded = ref(false);
 
-const showError = (message: string) => {
-  if ((window as any).showError) {
-    (window as any).showError(message);
-  }
-  console.error(message);
-};
-
-
-// Загрузка статистики пользователя с бэкенда
+// Загрузка статистики
 const loadUserStats = async () => {
-  if (!userId.value) return;
+  const uid = userId.value;
+  console.log('loadUserStats called, userId.value =', uid);
+  
+  if (!uid) {
+    console.log('No userId yet, waiting...');
+    return false;
+  }
   
   try {
-    console.log('Loading user stats from backend...');
-    const success = await gameStore.loadStatsFromBackend();
+    console.log('Loading user stats from backend for user:', uid);
+    // Передаем userId в метод store
+    const success = await gameStore.loadStatsFromBackend(uid);
+    console.log('loadStatsFromBackend returned:', success);
     if (success) {
       console.log('User stats loaded:', {
         score: gameStore.score,
         accuracy: gameStore.accuracy,
         bestStreak: gameStore.bestStreak
       });
-    } else {
-      console.log('Failed to load stats, using defaults');
+      return true;
     }
+    console.log('Failed to load stats');
+    return false;
   } catch (error) {
     console.error('Failed to load user stats:', error);
-  } finally {
-    isStatsLoaded.value = true;
+    return false;
   }
 };
 
-// Получение данных пользователя из Telegram
-const getTelegramUserData = () => {
-  const telegram = (window as any).Telegram?.WebApp;
-  if (telegram?.initDataUnsafe?.user) {
-    const user = telegram.initDataUnsafe.user;
-    return {
-      username: user.username || '',
-      firstName: user.first_name || '',
-      lastName: user.last_name || ''
-    };
-  }
-  return {
-    username: 'test_user',
-    firstName: 'Тестовый',
-    lastName: 'Пользователь'
-  };
-};
 
 // Также добавьте тип для Vite env
 declare global {
@@ -198,28 +148,40 @@ declare global {
   }
 }
 
+// Следим за готовностью Telegram и загружаем статистику
+watch([telegramReady, userId], async ([isReady, id]) => {
+  console.log('Watch triggered - telegramReady:', isReady, 'userId:', id);
+  if (isReady && id) {
+    console.log('Telegram ready and userId present, loading stats...');
+    isStatsLoaded.value = false;
+    const loaded = await loadUserStats();
+    console.log('Stats loaded result:', loaded);
+    isStatsLoaded.value = true;
+    
+    // Дополнительная проверка: если данные не загрузились, но userId есть - пробуем еще раз
+    if (!loaded && userId.value) {
+      console.log('Retrying stats load...');
+      setTimeout(async () => {
+        await loadUserStats();
+      }, 500);
+    }
+  }
+});
+
 const startGame = async () => {
   console.log('🎮 Starting game...');
-  
-  // Сохраняем имя пользователя
   localStorage.setItem('userName', userName.value);
-  
-  // ТОЛЬКО ОДИН РАЗ - через store
   await gameStore.initGame(userId.value, userId.value);
-  
-  // Переключаемся на игровое поле
   gameKey.value++;
   currentView.value = 'game';
 };
 
-  const handleBackToMenu = async () => {
-    console.log('🔙 Back to menu from game');
-    currentView.value = 'menu';
-    // Принудительно обновляем статистику
-    await loadUserStats();
-    // Принудительно обновляем отображение
-    gameKey.value++;
-  };
+const handleBackToMenu = async () => {
+  console.log('🔙 Back to menu from game');
+  currentView.value = 'menu';
+  await loadUserStats();
+  gameKey.value++;
+};
 
 const showLeaderboard = () => {
   console.log('🏆 Showing leaderboard');
@@ -236,25 +198,12 @@ const showAdmin = () => {
   currentView.value = 'admin';
 };
 
-const handleImageError = (event: Event) => {
-  const img = event.target as HTMLImageElement;
-  img.style.display = 'none';
-  const parent = img.parentElement;
-  if (parent) {
-    const fallback = document.createElement('div');
-    fallback.className = 'mascot-emoji-fallback';
-    fallback.textContent = '🐱';
-    fallback.style.fontSize = '60px';
-    fallback.style.animation = 'float 3s ease-in-out infinite';
-    parent.insertBefore(fallback, img);
-  }
-};
-
-onMounted(async () => {
+onMounted(() => {
   console.log('GameView mounted');
   console.log('User ID:', userId.value);
   console.log('Is Admin:', isAdmin.value);
   console.log('User Name:', userName.value);
+  console.log('Telegram ready:', telegramReady.value);
   
   chatId.value = userId.value;
   
@@ -262,21 +211,61 @@ onMounted(async () => {
     localStorage.setItem('userName', userName.value);
   }
   
-  // Показываем загрузку
-  isStatsLoaded.value = false;
-  
-  // Загружаем статистику
-  await loadUserStats();
-  
-  await checkBackendConnection();
-  // Даем время на отрисовку
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // Если уже готово - загружаем
+  if (telegramReady.value && userId.value) {
+    console.log('Already ready, loading stats...');
+    isStatsLoaded.value = false;
+    loadUserStats().then(() => {
+      isStatsLoaded.value = true;
+      console.log('Stats loaded, isStatsLoaded =', isStatsLoaded.value);
+    });
+  } else {
+    console.log('Not ready yet, waiting for watch');
+  }
 });
 </script>
 
 
 <style scoped>
 
+.loading-screen {
+  background: #1a1a1a;
+  border-radius: 30px;
+  padding: 60px 30px;
+  text-align: center;
+  border: 1px solid #2a2a2a;
+}
+
+.loader {
+  width: 50px;
+  height: 50px;
+  border: 3px solid #2a2a2a;
+  border-top: 3px solid #4f4ff4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-screen p {
+  color: #888;
+  font-size: 14px;
+}
+
+.mascot-emoji {
+  font-size: 80px;
+  margin-bottom: 10px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
 
 .game-view {
   min-height: 100vh;

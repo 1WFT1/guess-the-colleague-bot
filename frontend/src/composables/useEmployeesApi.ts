@@ -7,54 +7,48 @@ export function useEmployeesApi() {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  const getAll = async (): Promise<Employee[]> => {
-    isLoading.value = true;
-    error.value = null;
-    try {
-      const employees = await gameApi.getEmployees();
-      return employees.map((emp: any) => ({
-        id: emp.id,
-        fullName: emp.fullName,
-        department: emp.department,
-        photoUrl: emp.photoUrl,
-        isActive: emp.active,
-        createdAt: emp.createdAt,
-        updatedAt: emp.updatedAt
-      }));
-    } catch (err) {
-      error.value = 'Ошибка загрузки сотрудников';
-      console.error(err);
-      return [];
-    } finally {
-      isLoading.value = false;
-    }
-  };
+const getAll = async (): Promise<Employee[]> => {
+  // Для админ-панели нужен endpoint, который возвращает ВСЕХ
+  const response = await gameApi.getEmployees(); // Должен возвращать всех
+  return response;
+};
 
-  const create = async (data: Partial<Employee>): Promise<Employee | null> => {
-    isLoading.value = true;
-    try {
-      const result = await gameApi.createEmployee(data);
-      return result;
-    } catch (err) {
-      error.value = 'Ошибка создания сотрудника';
-      return null;
-    } finally {
-      isLoading.value = false;
-    }
-  };
-
-  const update = async (id: number, data: Partial<Employee>): Promise<Employee | null> => {
-    isLoading.value = true;
-    try {
-      const result = await gameApi.updateEmployee(id, data);
-      return result;
-    } catch (err) {
-      error.value = 'Ошибка обновления сотрудника';
-      return null;
-    } finally {
-      isLoading.value = false;
-    }
-  };
+const create = async (data: any): Promise<Employee | null> => {
+  isLoading.value = true;
+  try {
+    console.log('📤 useEmployeesApi.create received:', data);
+    const result = await gameApi.createEmployee(data);
+    console.log('✅ useEmployeesApi.create success:', result);
+    return result;
+  } catch (err: any) {
+    console.error('❌ useEmployeesApi.create error:', err);
+    console.error('❌ err.response:', err.response);
+    console.error('❌ err.response.data:', err.response?.data);
+    error.value = 'Ошибка создания сотрудника';
+    return null;
+  } finally {
+    isLoading.value = false;
+  }
+};
+const update = async (id: number, data: any): Promise<Employee | null> => {
+  isLoading.value = true;
+  try {
+    const payload = {
+      fullName: data.fullName || '',
+      department: data.department || '',
+      photoUrl: data.photoUrl || '',
+      active: data.active === true
+    };
+    const result = await gameApi.updateEmployee(id, payload);
+    return result;
+  } catch (err) {
+    console.error('Error updating employee:', err);
+    error.value = 'Ошибка обновления сотрудника';
+    return null;
+  } finally {
+    isLoading.value = false;
+  }
+};
 
   const deleteEmployee = async (id: number): Promise<boolean> => {
     isLoading.value = true;
@@ -69,10 +63,10 @@ export function useEmployeesApi() {
     }
   };
 
-  const toggleActive = async (id: number, isActive: boolean): Promise<boolean> => {
+  const toggleActive = async (id: number, active: boolean): Promise<boolean> => {
     isLoading.value = true;
     try {
-      await gameApi.toggleEmployeeActive(id, isActive);
+      await gameApi.toggleEmployeeActive(id, active);
       return true;
     } catch (err) {
       error.value = 'Ошибка изменения статуса';

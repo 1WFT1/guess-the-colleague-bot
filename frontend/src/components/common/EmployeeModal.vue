@@ -39,9 +39,10 @@
         </div>
         
         <div class="form-group">
+          <div></div>
           <label class="checkbox-label">
-            <input type="checkbox" v-model="formData.isActive" />
-            <span>Активен</span>
+            <input type="checkbox" v-model="formData.active" />
+            <span>Активен1</span>
           </label>
         </div>
         
@@ -82,7 +83,7 @@ const formData = ref({
   fullName: '',
   department: '',
   photoUrl: '',
-  isActive: true
+  active: true
 });
 
 watch(() => props.employee, (employee) => {
@@ -91,14 +92,14 @@ watch(() => props.employee, (employee) => {
       fullName: employee.fullName,
       department: employee.department,
       photoUrl: employee.photoUrl,
-      isActive: employee.isActive
+      active: employee.active
     };
   } else {
     formData.value = {
       fullName: '',
       department: '',
       photoUrl: '',
-      isActive: true
+      active: true
     };
   }
 }, { immediate: true });
@@ -223,9 +224,13 @@ const handleImageError = (event: Event) => {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  order: 1; /* Чекбокс справа */
 }
 
-.checkbox-label span { color: #e0e0e0; }
+.checkbox-label span {
+  color: #e0e0e0;
+  order: 0; /* Текст слева от чекбокса */
+}
 
 .photo-preview {
   margin-top: 15px;
