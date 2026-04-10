@@ -13,18 +13,18 @@ import java.util.UUID;
  * Модель игровой сессии пользователя
  * Хранит состояние игры для конкретного пользователя
  */
-@Entity  // Указывает, что это сущность JPA для сохранения в БД
-@Table(name = "game_sessions")  // Имя таблицы в базе данных
-@Data  // Lombok: генерирует геттеры, сеттеры, toString, equals, hashCode
-@NoArgsConstructor  // Lombok: генерирует конструктор без параметров
+@Entity
+@Table(name = "game_sessions")
+@Data
+@NoArgsConstructor
 public class GameSession {
 
     /**
      * Уникальный идентификатор игровой сессии
      * Автоматически генерируется как UUID
      */
-    @Id  // Первичный ключ
-    @GeneratedValue(strategy = GenerationType.UUID)  // Автоматическая генерация UUID
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     /**
@@ -115,15 +115,33 @@ public class GameSession {
         this.wrongAnswers++;
     }
 
+    /**
+     * Текущая серия правильных ответов
+     * Сбрасывается до 0 при неправильном ответе
+     */
     @Column(name = "current_streak")
     private int currentStreak = 0;
 
+    /**
+     * Рекордная серия правильных ответов за всю игру
+     * Обновляется, когда current_streak превышает это значение
+     */
     @Column(name = "best_streak")
     private int bestStreak = 0;
 
+    /**
+     * Тип текущего вопроса ("name" или "department")
+     * Используется для чередования типов вопросов
+     */
     @Column(name = "current_question_type")
     private String currentQuestionType;
 
+    /**
+     * Режим игры для текущей сессии
+     * "name" - угадать сотрудника по фото
+     * "department" - угадать отдел сотрудника
+     * По умолчанию "name"
+     */
     @Column(name = "game_mode")
     private String gameMode = "name";
 }

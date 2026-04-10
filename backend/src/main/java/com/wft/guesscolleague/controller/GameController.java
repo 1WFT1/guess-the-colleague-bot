@@ -36,6 +36,18 @@ public class GameController {
     private final GameService gameService;
     private final TelegramUserService telegramUserService;
 
+    /**
+     * Создает новую игровую сессию
+     * POST /api/game/session
+     *
+     * @param userId    ID пользователя в Telegram
+     * @param chatId    ID чата (опционально)
+     * @param username  Имя пользователя Telegram (опционально)
+     * @param firstName Имя (опционально)
+     * @param lastName  Фамилия (опционально)
+     * @param gameMode  Режим игры: "name" - угадать сотрудника, "department" - угадать отдел
+     * @return UUID созданной сессии
+     */
     @PostMapping("/session")
     public ResponseEntity<UUID> createSession(
             @RequestParam Long userId,
@@ -47,6 +59,7 @@ public class GameController {
 
         log.info("Creating session for user: {} with gameMode: {}", userId, gameMode);
 
+        // Регистрируем или обновляем пользователя в БД
         telegramUserService.registerOrUpdateUser(userId, username, firstName, lastName);
 
         UUID sessionId = gameService.createSession(userId, chatId, gameMode).getId();
@@ -70,6 +83,7 @@ public class GameController {
     })
     @GetMapping("/next-question")
     public ResponseEntity<QuestionDTO> getNextQuestion(
+            @Parameter(description = "ID игровой сессии", required = true)
             @RequestParam UUID sessionId) {
         QuestionDTO question = gameService.generateNextQuestion(sessionId);
         return ResponseEntity.ok(question);
@@ -92,19 +106,19 @@ public class GameController {
     })
     @PostMapping("/answer")
     public ResponseEntity<AnswerResponse> submitAnswer(
+            @Parameter(description = "Данные ответа", required = true)
             @RequestBody AnswerRequest request) {
         AnswerResponse response = gameService.processAnswer(request);
         return ResponseEntity.ok(response);
     }
 
-    //@PostMapping("/reset-stats")
-    //public ResponseEntity<?> resetStats(@RequestParam Long userId) {
-    //    log.info("Resetting stats for user: {}", userId);
-    //    telegramUserService.resetUserStats(userId);
-    //    return ResponseEntity.ok().build();
-    //}
-
-    // Добавьте этот метод в GameController.java
+    /**
+     * Получает статистику пользователя
+     * GET /api/game/user-stats?userId=xxx
+     *
+     * @param userId ID пользователя Telegram
+     * @return DTO с полной статистикой пользователя
+     */
     @GetMapping("/user-stats")
     public ResponseEntity<UserStatsDTO> getUserStats(@RequestParam Long userId) {
         log.info("Getting stats for user: {}", userId);
@@ -112,7 +126,18 @@ public class GameController {
         return ResponseEntity.ok(new UserStatsDTO(user));
     }
 
-    // Также добавьте метод для обновления статистики после игры
+    /**
+     * Обновляет статистику пользователя после игры
+     * POST /api/game/update-stats
+     *
+     * @param userId         ID пользователя Telegram
+     * @param totalScore     Общее количество очков
+     * @param correctAnswers Количество правильных ответов
+     * @param wrongAnswers   Количество неправильных ответов
+     * @param currentStreak  Текущая серия правильных ответов
+     * @param bestStreak     Рекордная серия правильных ответов
+     * @return Обновленный DTO со статистикой пользователя
+     */
     @PostMapping("/update-stats")
     public ResponseEntity<UserStatsDTO> updateStats(
             @RequestParam Long userId,
@@ -124,18 +149,25 @@ public class GameController {
 
         log.info("Updating stats for user: {} (score: {})", userId, totalScore);
 
-        // Обновляем статистику (метод возвращает void)
         telegramUserService.updateStats(userId, totalScore, correctAnswers,
                 wrongAnswers, currentStreak, bestStreak);
-
-        // Получаем обновленного пользователя отдельным запросом
         TelegramUser user = telegramUserService.getUserStats(userId);
 
         return ResponseEntity.ok(new UserStatsDTO(user));
     }
 
+    /**
+     * Обновляет режим игры для существующей сессии
+     * PATCH /api/game/session/{sessionId}/mode?gameMode=xxx
+     *
+     * @param sessionId ID игровой сессии
+     * @param gameMode  Новый режим игры: "name" или "department"
+     * @return пустой ответ с кодом 200 при успешном обновлении
+     */
     @PatchMapping("/session/{sessionId}/mode")
-    public ResponseEntity<?> updateGameMode(@PathVariable UUID sessionId, @RequestParam String gameMode) {
+    public ResponseEntity<?> updateGameMode(
+            @PathVariable UUID sessionId,
+            @RequestParam String gameMode) {
         log.info("Updating game mode for session: {} to {}", sessionId, gameMode);
         gameService.updateGameMode(sessionId, gameMode);
         return ResponseEntity.ok().build();

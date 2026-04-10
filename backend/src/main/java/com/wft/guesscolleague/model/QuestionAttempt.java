@@ -89,10 +89,13 @@ public class QuestionAttempt {
      * Дата и время создания записи
      * Автоматически заполняется при создании, нельзя изменить
      */
-    @CreationTimestamp  // Автоматически заполняется Hibernate
-    @Column(name = "created_at", updatable = false)  // Нельзя обновить после создания
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * Определение типа вопроса
+     */
     @Column(name = "question_type")
     private String questionType;
 }

@@ -28,27 +28,34 @@ import java.util.stream.Collectors;
  * Содержит всю бизнес-логику игры: создание сессий, генерацию вопросов, обработку ответов
  */
 @Service
-@RequiredArgsConstructor  // Lombok: конструктор для final полей
-@Slf4j  // Lombok: логгер
+@RequiredArgsConstructor
+@Slf4j
 public class GameService {
 
-    private final EmployeeService employeeService;
-    private final GameSessionRepository sessionRepository;
-    private final QuestionAttemptRepository attemptRepository;
-    private final ObjectMapper objectMapper;
-    private final TelegramUserService telegramUserService;
+    private final EmployeeService employeeService;           // Сервис для работы с сотрудниками
+    private final GameSessionRepository sessionRepository;   // Репозиторий игровых сессий
+    private final QuestionAttemptRepository attemptRepository; // Репозиторий попыток ответов
+    private final ObjectMapper objectMapper;                 // Для JSON сериализации/десериализации
+    private final TelegramUserService telegramUserService;   // Сервис для работы с пользователями
 
     /**
-     * Создает новую игровую сессию
+     * Создает новую игровую сессию для пользователя
+     *
+     * @param userId   ID пользователя в Telegram
+     * @param chatId   ID чата (опционально)
+     * @param gameMode Режим игры: "name" - угадать сотрудника, "department" - угадать отдел
+     * @return созданная игровая сессия
      */
     @Transactional
     public GameSession createSession(Long userId, Long chatId, String gameMode) {
         log.info("Creating session for user: {} with gameMode: {}", userId, gameMode);
 
+        // Получаем текущую статистику пользователя
         TelegramUser user = telegramUserService.getUserStats(userId);
+        // Увеличиваем счетчик сыгранных игр
         telegramUserService.incrementGamesPlayed(userId);
 
-        // Закрываем старые сессии
+        // Закрываем предыдущие активные сессии пользователя
         Optional<GameSession> oldSessionOpt = sessionRepository.findByUserIdAndIsActiveTrue(userId);
         if (oldSessionOpt.isPresent()) {
             GameSession old = oldSessionOpt.get();
@@ -56,6 +63,7 @@ public class GameService {
             sessionRepository.save(old);
         }
 
+        // Создаем новую сессию с текущей статистикой пользователя
         GameSession session = new GameSession();
         session.setUserId(userId);
         session.setChatId(chatId);
@@ -66,7 +74,7 @@ public class GameService {
         session.setCurrentStreak(user.getCurrentStreak());
         session.setBestStreak(user.getBestStreak());
         session.setActive(true);
-        session.setGameMode(gameMode);  // <-- КЛЮЧЕВОЕ: сохраняем режим
+        session.setGameMode(gameMode);  // Сохраняем выбранный режим игры
 
         GameSession saved = sessionRepository.save(session);
         log.info("Created session: {} with gameMode: {}", saved.getId(), gameMode);
@@ -75,12 +83,7 @@ public class GameService {
 
     /**
      * Генерирует следующий вопрос для игровой сессии
-     * Алгоритм:
-     * 1. Выбирает случайного сотрудника (правильный ответ)
-     * 2. Выбирает 3 случайных других сотрудников (дистракторы)
-     * 3. Перемешивает варианты ответов
-     * 4. Сохраняет вопрос в БД
-     * 5. Возвращает DTO для фронтенда
+     * Тип вопроса (имя сотрудника или отдел) определяется из режима сессии
      *
      * @param sessionId ID игровой сессии
      * @return DTO с вопросом (фото + варианты ответов)
@@ -101,17 +104,29 @@ public class GameService {
         }
     }
 
+    /**
+     * Генерирует вопрос на угадывание имени сотрудника
+     * Выбирает случайного сотрудника и 3 случайных дистракторов (неправильных варианта)
+     *
+     * @param session текущая игровая сессия
+     * @return DTO с вопросом для фронтенда
+     */
     private QuestionDTO generateNameQuestion(GameSession session) {
+        // Выбираем правильного сотрудника
         Employee correctEmployee = employeeService.getRandomActiveEmployee();
+        // Выбираем 3 случайных дистрактора
         List<Employee> distractors = employeeService.getRandomActiveEmployees(correctEmployee.getId(), 3);
 
+        // Формируем варианты ответов с employeeId для проверки
         List<Map<String, Object>> options = new ArrayList<>();
 
+        // Правильный ответ
         Map<String, Object> correctOption = new HashMap<>();
         correctOption.put("employeeId", correctEmployee.getId().toString());
         correctOption.put("fullName", correctEmployee.getFullName());
         options.add(correctOption);
 
+        // Дистракторы
         for (Employee d : distractors) {
             Map<String, Object> option = new HashMap<>();
             option.put("employeeId", d.getId().toString());
@@ -119,12 +134,14 @@ public class GameService {
             options.add(option);
         }
 
+        // Перемешиваем варианты
         Collections.shuffle(options);
 
+        // Сохраняем вопрос в БД
         QuestionAttempt attempt = new QuestionAttempt();
         attempt.setSession(session);
         attempt.setEmployee(correctEmployee);
-        attempt.setQuestionType("name");  // Важно: устанавливаем тип
+        attempt.setQuestionType("name");  // Устанавливаем тип вопроса
 
         try {
             String optionsJson = objectMapper.writeValueAsString(options);
@@ -136,6 +153,7 @@ public class GameService {
 
         attemptRepository.save(attempt);
 
+        // Извлекаем только имена для отображения на фронтенде
         List<String> optionNames = options.stream()
                 .map(opt -> (String) opt.get("fullName"))
                 .collect(Collectors.toList());
@@ -143,11 +161,19 @@ public class GameService {
         return new QuestionDTO(attempt.getId(), correctEmployee.getPhotoUrl(), optionNames);
     }
 
+    /**
+     * Генерирует вопрос на угадывание отдела сотрудника
+     * Правильный ответ - отдел сотрудника, варианты - все существующие отделы
+     *
+     * @param session текущая игровая сессия
+     * @return DTO с вопросом для фронтенда
+     */
     private QuestionDTO generateDepartmentQuestion(GameSession session) {
+        // Выбираем случайного сотрудника
         Employee correctEmployee = employeeService.getRandomActiveEmployee();
         String correctDepartment = correctEmployee.getDepartment();
 
-        // Получаем все уникальные отделы
+        // Получаем все уникальные отделы из активных сотрудников
         List<String> allDepartments = employeeService.getAllActiveEmployees()
                 .stream()
                 .map(Employee::getDepartment)
@@ -155,9 +181,11 @@ public class GameService {
                 .distinct()
                 .collect(Collectors.toList());
 
+        // Формируем варианты ответов
         List<String> options = new ArrayList<>();
-        options.add(correctDepartment);
+        options.add(correctDepartment);  // Правильный отдел
 
+        // Добавляем 3 случайных других отдела
         List<String> otherDepartments = allDepartments.stream()
                 .filter(d -> !d.equals(correctDepartment))
                 .collect(Collectors.toList());
@@ -167,12 +195,14 @@ public class GameService {
             options.add(otherDepartments.get(i));
         }
 
+        // Если не хватает отделов, добавляем заглушку
         while (options.size() < 4) {
             options.add("Другой отдел");
         }
 
         Collections.shuffle(options);
 
+        // Сохраняем вопрос в БД
         QuestionAttempt attempt = new QuestionAttempt();
         attempt.setSession(session);
         attempt.setEmployee(correctEmployee);
@@ -193,12 +223,14 @@ public class GameService {
 
     /**
      * Обрабатывает ответ пользователя на вопрос
+     *
      * Алгоритм:
      * 1. Находит вопрос по ID
-     * 2. Сравнивает выбранный вариант с правильным ответом
-     * 3. Начисляет/списывает баллы (+5 за правильный, -6 за неправильный)
-     * 4. Обновляет статистику сессии
-     * 5. Сохраняет результат попытки
+     * 2. Определяет тип вопроса (имя/отдел)
+     * 3. Сравнивает выбранный вариант с правильным ответом
+     * 4. Начисляет/списывает баллы (+5 за правильный, -6 за неправильный, но не ниже 0)
+     * 5. Обновляет статистику сессии (очки, серии, правильные/неправильные)
+     * 6. Сохраняет результат попытки
      *
      * @param request данные ответа (sessionId, questionId, selectedOptionIndex)
      * @return результат проверки ответа
@@ -207,25 +239,28 @@ public class GameService {
     public AnswerResponse processAnswer(AnswerRequest request) {
         log.info("Processing answer for question: {}", request.getQuestionId());
 
+        // Находим вопрос в БД
         QuestionAttempt attempt = attemptRepository.findById(request.getQuestionId())
                 .orElseThrow(() -> new IllegalArgumentException("Question attempt not found"));
 
+        // Защита от повторной отправки ответа
         if (attempt.getIsCorrect() != null) {
             throw new IllegalStateException("Question already answered");
         }
 
+        // Определяем тип вопроса
         String questionType = attempt.getQuestionType();
         if (questionType == null) {
             questionType = "name";
         }
-
         log.info("Question type: {}", questionType);
 
         boolean isCorrect;
         String correctAnswerText;
 
+        // ========== ОБРАБОТКА В ЗАВИСИМОСТИ ОТ ТИПА ВОПРОСА ==========
         if ("department".equals(questionType)) {
-            // ========== ЛОГИКА ДЛЯ ВОПРОСОВ ОБ ОТДЕЛАХ ==========
+            // Логика для вопросов об отделах
             List<String> options;
             try {
                 options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<String>>() {});
@@ -235,6 +270,7 @@ public class GameService {
                 throw new RuntimeException("Failed to parse options", e);
             }
 
+            // Проверяем корректность индекса
             if (request.getSelectedOptionIndex() < 0 || request.getSelectedOptionIndex() >= options.size()) {
                 throw new IllegalArgumentException("Invalid option index");
             }
@@ -248,7 +284,7 @@ public class GameService {
             log.info("Department answer - Correct: {}, Selected: {}", correctDepartment, selectedDepartment);
 
         } else {
-            // ========== ЛОГИКА ДЛЯ ВОПРОСОВ ОБ ИМЕНАХ ==========
+            // Логика для вопросов об именах
             List<Map<String, Object>> options;
             try {
                 options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<Map<String, Object>>>() {});
@@ -272,18 +308,20 @@ public class GameService {
             log.info("Name answer - Correct: {}, Selected: {}", correctEmployeeId, selectedEmployeeId);
         }
 
-        // ========== ОБЩАЯ ЛОГИКА НАЧИСЛЕНИЯ ОЧКОВ ==========
+        // ========== ОБНОВЛЕНИЕ СТАТИСТИКИ СЕССИИ ==========
         GameSession session = attempt.getSession();
         int currentScore = session.getTotalScore();
         int pointsDelta;
         String message;
 
         if (isCorrect) {
+            // Правильный ответ: +5 очков
             pointsDelta = 5;
             int newScore = currentScore + pointsDelta;
             session.setTotalScore(newScore);
             session.incrementCorrect();
 
+            // Обновляем серию правильных ответов
             int newStreak = session.getCurrentStreak() + 1;
             session.setCurrentStreak(newStreak);
             if (newStreak > session.getBestStreak()) {
@@ -293,6 +331,7 @@ public class GameService {
             message = "Верно! +5 баллов";
             log.info("Correct answer! +5 points. New score: {}", session.getTotalScore());
         } else {
+            // Неправильный ответ: списываем баллы с защитой от отрицательного счета
             if (currentScore >= 6) {
                 pointsDelta = -6;
                 int newScore = currentScore + pointsDelta;
@@ -300,25 +339,30 @@ public class GameService {
                 message = "Ошибка! -6 баллов. Правильно: " + correctAnswerText;
                 log.info("Wrong answer! -6 points. New score: {}", session.getTotalScore());
             } else if (currentScore > 0 && currentScore < 6) {
+                // Если очков меньше 6, списываем только то, что есть
                 pointsDelta = -currentScore;
                 session.setTotalScore(0);
                 message = "Ошибка! -" + currentScore + " баллов. Правильно: " + correctAnswerText;
                 log.info("Wrong answer! -{} points (had only {}). New score: 0", currentScore, currentScore);
             } else {
+                // Если очков 0, не списываем
                 pointsDelta = 0;
                 session.setTotalScore(0);
                 message = "Ошибка! Правильно: " + correctAnswerText + " (у вас 0 очков, штраф не применен)";
                 log.info("Wrong answer! No points to deduct. Score remains 0");
             }
-            session.setCurrentStreak(0);
+            session.setCurrentStreak(0);  // Сбрасываем серию
             session.incrementWrong();
         }
 
+        // Сохраняем обновления сессии
         session.setLastActivity(LocalDateTime.now());
         sessionRepository.save(session);
 
+        // Обновляем общий счет пользователя
         telegramUserService.updateScore(session.getUserId(), session.getTotalScore());
 
+        // Сохраняем результат попытки
         attempt.setSelectedOption(request.getSelectedOptionIndex());
         attempt.setIsCorrect(isCorrect);
         attempt.setPointsDelta(pointsDelta);
@@ -336,8 +380,12 @@ public class GameService {
         );
     }
 
-    // Очистка старых неактивных сессий (старше 7 дней)
-    @Scheduled(cron = "0 0 3 * * ?") // Каждый день в 3 часа ночи
+    /**
+     * Очистка старых неактивных сессий (старше 7 дней)
+     * Запускается автоматически каждый день в 3 часа ночи
+     * Удаляет сессии, которые были неактивны более 7 дней
+     */
+    @Scheduled(cron = "0 0 3 * * ?")
     @Transactional
     public void cleanupOldSessions() {
         LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
@@ -345,7 +393,11 @@ public class GameService {
         log.info("Deleted {} old inactive sessions", deleted);
     }
 
-    // Очистка старых вопросов (старше 30 дней)
+    /**
+     * Очистка старых вопросов (старше 30 дней)
+     * Запускается автоматически каждый день в 4 часа ночи
+     * Удаляет попытки ответов, созданные более 30 дней назад
+     */
     @Scheduled(cron = "0 0 4 * * ?")
     @Transactional
     public void cleanupOldQuestions() {
@@ -354,6 +406,12 @@ public class GameService {
         log.info("Deleted {} old question attempts", deleted);
     }
 
+    /**
+     * Обновляет режим игры в существующей сессии
+     *
+     * @param sessionId ID игровой сессии
+     * @param gameMode  новый режим игры ("name" или "department")
+     */
     @Transactional
     public void updateGameMode(UUID sessionId, String gameMode) {
         GameSession session = sessionRepository.findById(sessionId)
@@ -362,5 +420,4 @@ public class GameService {
         sessionRepository.save(session);
         log.info("Updated session {} gameMode to {}", sessionId, gameMode);
     }
-
 }
