@@ -1,5 +1,6 @@
 package com.wft.guesscolleague.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,7 +37,6 @@ public class TelegramConfig {
                 .collect(Collectors.toList());
     }
 
-    // Геттеры для доступа из других классов
     public String getBotToken() {
         return botToken;
     }

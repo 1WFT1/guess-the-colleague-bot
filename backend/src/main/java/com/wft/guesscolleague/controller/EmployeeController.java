@@ -15,6 +15,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * Контроллер для управления сотрудниками
+ * Предоставляет REST API для CRUD операций с сотрудниками
+ * Доступен по адресу: /api/employees
+ */
 @RestController
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor
@@ -24,20 +29,36 @@ public class EmployeeController {
 
     private final EmployeeService employeeService;
 
-    // Для админ-панели - ВСЕ сотрудники
+    /**
+     * Получить всех сотрудников (для админ-панели)
+     * GET /api/employees
+     *
+     * @return список всех сотрудников (и активных, и неактивных)
+     */
     @GetMapping
     public ResponseEntity<List<Employee>> getAllEmployees() {
         log.info("Getting ALL employees for admin panel");
         return ResponseEntity.ok(employeeService.getAllEmployees());
     }
 
-    // Для игры - ТОЛЬКО активные сотрудники (другой путь!)
+    /**
+     * Получить только активных сотрудников (для игры)
+     * GET /api/employees/active
+     *
+     * @return список только активных сотрудников
+     */
     @GetMapping("/active")
     public ResponseEntity<List<Employee>> getActiveEmployees() {
         log.info("Getting ACTIVE employees for game");
         return ResponseEntity.ok(employeeService.getAllActiveEmployees());
     }
 
+    /**
+     * Получить количество активных сотрудников
+     * GET /api/employees/count
+     *
+     * @return количество активных сотрудников
+     */
     @GetMapping("/count")
     public ResponseEntity<Map<String, Object>> getCount() {
         long count = employeeService.countActiveEmployees();
@@ -48,6 +69,13 @@ public class EmployeeController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Получить сотрудника по ID
+     * GET /api/employees/{id}
+     *
+     * @param id UUID сотрудника
+     * @return данные сотрудника или 404 если не найден
+     */
     @GetMapping("/{id}")
     public ResponseEntity<Employee> getEmployee(@PathVariable UUID id) {
         Employee employee = employeeService.getEmployeeById(id);
@@ -57,6 +85,13 @@ public class EmployeeController {
         return ResponseEntity.ok(employee);
     }
 
+    /**
+     * Создать нового сотрудника
+     * POST /api/employees
+     *
+     * @param body данные сотрудника в формате JSON
+     * @return созданный сотрудник с присвоенным ID
+     */
     @PostMapping
     public ResponseEntity<?> createEmployee(@RequestBody Map<String, Object> body) {
         log.info("=== CREATE EMPLOYEE ===");
@@ -71,12 +106,13 @@ public class EmployeeController {
             }
             employee.setFullName(body.get("fullName").toString());
 
+            // Устанавливаем необязательные поля (если отсутствуют - пустая строка)
             employee.setDepartment(body.containsKey("department") && body.get("department") != null ?
                     body.get("department").toString() : "");
             employee.setPhotoUrl(body.containsKey("photoUrl") && body.get("photoUrl") != null ?
                     body.get("photoUrl").toString() : "");
 
-            // Обработка active
+            // Обработка статуса активности (по умолчанию true)
             if (body.containsKey("active") && body.get("active") != null) {
                 Object activeValue = body.get("active");
                 if (activeValue instanceof Boolean) {
@@ -100,6 +136,14 @@ public class EmployeeController {
         }
     }
 
+    /**
+     * Обновить данные сотрудника
+     * PUT /api/employees/{id}
+     *
+     * @param id ID сотрудника для обновления
+     * @param body новые данные сотрудника
+     * @return обновленный сотрудник
+     */
     @PutMapping("/{id}")
     public ResponseEntity<?> updateEmployee(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
         log.info("=== UPDATE EMPLOYEE ===");
@@ -149,12 +193,27 @@ public class EmployeeController {
         }
     }
 
+    /**
+     * Удалить сотрудника (мягкое удаление, установка isActive = false)
+     * DELETE /api/employees/{id}
+     *
+     * @param id ID сотрудника для удаления
+     * @return пустой ответ с кодом 200
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEmployee(@PathVariable UUID id) {
         employeeService.deleteEmployee(id);
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Переключить статус активности сотрудника
+     * PATCH /api/employees/{id}/active
+     *
+     * @param id ID сотрудника
+     * @param body тело запроса с полем active (true/false)
+     * @return обновленный сотрудник
+     */
     @PatchMapping("/{id}/active")
     public ResponseEntity<?> toggleActive(@PathVariable UUID id, @RequestBody Map<String, Boolean> body) {
         log.info("Toggling active status for employee: {}", id);
@@ -167,6 +226,7 @@ public class EmployeeController {
                 return ResponseEntity.notFound().build();
             }
 
+            // Поддержка обоих форматов: "active" и "isActive"
             Boolean isActive = body.get("isActive");
             if (isActive == null) {
                 isActive = body.get("active");
@@ -189,10 +249,21 @@ public class EmployeeController {
         }
     }
 
+    /**
+     * Загрузить сотрудников из CSV файла
+     * POST /api/employees/upload-csv
+     *
+     * Ожидается файл с колонками: ФИО, Отдел, Фото URL
+     * Первая строка считается заголовком и пропускается
+     *
+     * @param file CSV файл для загрузки
+     * @return список сохраненных сотрудников
+     */
     @PostMapping("/upload-csv")
     public ResponseEntity<?> uploadCSV(@RequestParam("file") MultipartFile file) {
         log.info("Received CSV upload request");
 
+        // Проверяем, что файл не пустой
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("Файл пуст");
         }
@@ -200,6 +271,7 @@ public class EmployeeController {
         try {
             List<Employee> employees = new ArrayList<>();
 
+            // Читаем CSV файл построчно
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
 
@@ -207,28 +279,32 @@ public class EmployeeController {
                 boolean isFirstLine = true;
 
                 while ((line = reader.readLine()) != null) {
+                    // Пропускаем первую строку (заголовок)
                     if (isFirstLine) {
                         isFirstLine = false;
                         continue;
                     }
 
+                    // Разделяем строку на колонки
                     String[] columns = line.split(",");
-                    if (columns.length < 3) continue;
+                    if (columns.length < 3) continue; // Пропускаем некорректные строки
 
                     Employee employee = new Employee();
                     employee.setFullName(columns[0].trim());
                     employee.setDepartment(columns[1].trim());
                     employee.setPhotoUrl(columns[2].trim());
-                    employee.setActive(true);
+                    employee.setActive(true); // Новые сотрудники активны по умолчанию
 
                     employees.add(employee);
                 }
             }
 
+            // Проверяем, что есть данные для импорта
             if (employees.isEmpty()) {
                 return ResponseEntity.badRequest().body("Нет данных для импорта");
             }
 
+            // Сохраняем всех сотрудников
             List<Employee> saved = employeeService.saveAll(employees);
             log.info("Uploaded {} employees via CSV", saved.size());
             return ResponseEntity.ok(saved);

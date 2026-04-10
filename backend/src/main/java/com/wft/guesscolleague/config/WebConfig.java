@@ -13,8 +13,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOrigins(
                         "http://localhost:5173",
                         "http://localhost:8080",
-                        "https://guess-the-colleague-bot.vercel.app",
-                        "https://1443036d45e82aaf-178-68-29-212.serveousercontent.com"  // НОВЫЙ URL!
+                        "*"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")

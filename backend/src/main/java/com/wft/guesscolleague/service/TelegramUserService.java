@@ -11,6 +11,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Сервис для управления пользователями Telegram
+ * Предоставляет методы для регистрации, обновления и получения статистики пользователей
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -21,18 +25,30 @@ public class TelegramUserService {
     @Value("${admin.user.ids:}")
     private String adminUserIds;
 
-    // Регистрация пользователя без дополнительных данных
+    /**
+     * Регистрация или обновление пользователя без дополнительных данных
+     *
+     * @param telegramId ID пользователя в Telegram
+     */
     @Transactional
     public void registerOrUpdateUser(Long telegramId) {
         registerOrUpdateUser(telegramId, null, null, null);
     }
 
-    // Регистрация пользователя с данными (возвращает void, а не TelegramUser)
+    /**
+     * Регистрация или обновление пользователя с данными
+     *
+     * @param telegramId ID пользователя в Telegram
+     * @param username   Username пользователя (без @)
+     * @param firstName  Имя пользователя
+     * @param lastName   Фамилия пользователя
+     */
     @Transactional
     public void registerOrUpdateUser(Long telegramId, String username,
                                      String firstName, String lastName) {
         Optional<TelegramUser> existing = userRepository.findByTelegramId(telegramId);
 
+        // Формируем полное имя из имени и фамилии
         String fullName = "";
         if (firstName != null && !firstName.isEmpty()) {
             fullName = firstName;
@@ -42,24 +58,28 @@ public class TelegramUserService {
         }
 
         if (existing.isPresent()) {
+            // Обновляем существующего пользователя, но только если имя не было изменено ранее
             TelegramUser user = existing.get();
-            // НЕ ОБНОВЛЯЕМ имя, если оно уже есть и не пустое!
-            // Обновляем только если пришли новые данные И старые - дефолтные
+
+            // Обновляем username только если он дефолтный
             if (username != null && !username.isEmpty() &&
                     (user.getUsername() == null || user.getUsername().startsWith("User "))) {
                 user.setUsername(username);
             }
+
+            // Обновляем полное имя только если оно дефолтное
             if (!fullName.isEmpty() &&
                     (user.getFullName() == null || user.getFullName().startsWith("User "))) {
                 user.setFullName(fullName);
                 user.setFirstName(firstName);
                 user.setLastName(lastName);
             }
+
             user.setLastActive(LocalDateTime.now());
             userRepository.save(user);
             log.info("Updated existing user: {} ({})", user.getFullName(), telegramId);
         } else {
-            // Только для новых пользователей
+            // Создаем нового пользователя
             if (fullName.isEmpty()) {
                 fullName = username != null ? username : "User " + telegramId;
             }
@@ -78,14 +98,20 @@ public class TelegramUserService {
             newUser.setCurrentStreak(0);
             newUser.setBestStreak(0);
             newUser.setActive(true);
-            newUser.setAdmin(isAdminUser(telegramId));
+            newUser.setAdmin(isAdminUser(telegramId));  // Проверяем, является ли пользователь админом
 
             userRepository.save(newUser);
             log.info("Registered new user: {} ({})", newUser.getFullName(), telegramId);
         }
     }
 
-    // Метод проверки админа (сделайте public или protected)
+    /**
+     * Проверяет, является ли пользователь администратором
+     * Администраторы задаются в application.properties через admin.user.ids
+     *
+     * @param telegramId ID пользователя в Telegram
+     * @return true если пользователь админ, false в противном случае
+     */
     protected boolean isAdminUser(Long telegramId) {
         if (adminUserIds == null || adminUserIds.isEmpty()) {
             return false;
@@ -103,14 +129,28 @@ public class TelegramUserService {
         return false;
     }
 
-    // Метод обновления счета (updateScore)
+    /**
+     * Обновляет только общий счет пользователя
+     *
+     * @param telegramId ID пользователя в Telegram
+     * @param score      новое значение общего счета
+     */
     @Transactional
     public void updateScore(Long telegramId, int score) {
         userRepository.updateScore(telegramId, score);
         log.debug("Updated score for user {} to {}", telegramId, score);
     }
 
-    // Метод обновления полной статистики
+    /**
+     * Обновляет полную статистику пользователя
+     *
+     * @param telegramId     ID пользователя в Telegram
+     * @param totalScore     общее количество очков
+     * @param correctAnswers количество правильных ответов
+     * @param wrongAnswers   количество неправильных ответов
+     * @param currentStreak  текущая серия правильных ответов
+     * @param bestStreak     рекордная серия правильных ответов
+     */
     @Transactional
     public void updateStats(Long telegramId, int totalScore, int correctAnswers,
                             int wrongAnswers, int currentStreak, int bestStreak) {
@@ -120,48 +160,87 @@ public class TelegramUserService {
                 telegramId, totalScore, correctAnswers, wrongAnswers);
     }
 
-    // Метод увеличения счетчика игр
+    /**
+     * Увеличивает счетчик сыгранных игр на 1
+     * Вызывается при создании новой игровой сессии
+     *
+     * @param telegramId ID пользователя в Telegram
+     */
     @Transactional
     public void incrementGamesPlayed(Long telegramId) {
         userRepository.incrementGamesPlayed(telegramId);
         log.info("Incremented games played for user: {}", telegramId);
     }
 
-    // Метод сброса статистики
+    /**
+     * Полностью сбрасывает статистику пользователя (очки, ответы, серии)
+     *
+     * @param telegramId ID пользователя в Telegram
+     */
     @Transactional
     public void resetUserStats(Long telegramId) {
         userRepository.updateStats(telegramId, 0, 0, 0, 0, 0);
         log.info("Reset stats for user: {}", telegramId);
     }
 
+    /**
+     * Сбрасывает только счетчик сыгранных игр
+     *
+     * @param telegramId ID пользователя в Telegram
+     */
+    @Transactional
+    public void resetGamesPlayed(Long telegramId) {
+        userRepository.resetGamesPlayed(telegramId);
+        log.info("Reset games played for user: {}", telegramId);
+    }
 
-
-    // Получение пользователя
+    /**
+     * Получает пользователя по Telegram ID
+     *
+     * @param telegramId ID пользователя в Telegram
+     * @return Optional с пользователем или пустой Optional если не найден
+     */
     public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {
         return userRepository.findByTelegramId(telegramId);
     }
 
+    /**
+     * Получает таблицу лидеров, отсортированную по убыванию очков
+     *
+     * @return список пользователей, отсортированный по totalScore DESC
+     */
     public List<TelegramUser> getLeaderboard() {
         return userRepository.getLeaderboard();
     }
 
+    /**
+     * Подсчитывает количество активных пользователей за последние 24 часа
+     *
+     * @return количество активных пользователей
+     */
     public long getActiveUsersCount() {
         LocalDateTime dayAgo = LocalDateTime.now().minusDays(1);
         return userRepository.countActiveSince(dayAgo);
     }
 
+    /**
+     * Получает всех пользователей
+     *
+     * @return список всех пользователей
+     */
     public List<TelegramUser> getAllUsers() {
         return userRepository.findAll();
     }
 
+    /**
+     * Получает статистику пользователя, выбрасывает исключение если не найден
+     *
+     * @param telegramId ID пользователя в Telegram
+     * @return пользователь с полной статистикой
+     * @throws RuntimeException если пользователь не найден
+     */
     public TelegramUser getUserStats(Long telegramId) {
         return userRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-    }
-
-    @Transactional
-    public void resetGamesPlayed(Long telegramId) {
-        userRepository.resetGamesPlayed(telegramId);
-        log.info("Reset games played for user: {}", telegramId);
     }
 }

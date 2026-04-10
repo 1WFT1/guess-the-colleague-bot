@@ -19,7 +19,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/diagnostic")
-@RequiredArgsConstructor  // Lombok: генерирует конструктор для final полей
+@RequiredArgsConstructor
 @Tag(name = "Diagnostic Controller", description = "Эндпоинты для диагностики")
 public class DiagnosticController {
 
