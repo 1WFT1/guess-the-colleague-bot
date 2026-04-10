@@ -1,4 +1,8 @@
-// types/game.ts
+/**
+ * Типы и интерфейсы для игры "Угадай коллегу"
+ */
+
+// ========== ИГРОВЫЕ ТИПЫ ==========
 export interface Question {
   questionId: string;
   photoUrl: string | null;
@@ -20,28 +24,7 @@ export interface AnswerResponse {
   message: string;
 }
 
-export interface GameSession {
-  id: string;
-  userId: number;
-  totalScore: number;
-  correctAnswers: number;
-  wrongAnswers: number;
-}
-
-export interface LeaderboardEntry {
-  userId: number;
-  fullName: string;
-  totalScore: number;
-  accuracy: number;
-  rank: number;
-}
-
-export interface LeaderboardData {
-  week: string;
-  entries: LeaderboardEntry[];
-  currentUser: LeaderboardEntry | null;
-}
-
+// ========== СТАТИСТИКА ==========
 export interface GameStats {
   score: number;
   correctCount: number;
@@ -51,34 +34,7 @@ export interface GameStats {
   lastUpdated: string | null;
 }
 
-export interface PlayerStats {
-  userId: number;
-  fullName: string;
-  totalScore: number;
-  accuracy: number;
-  correctCount: number;
-  wrongCount: number;
-  lastUpdated: string;
-}
-
-export type WeekDay = 'Пн' | 'Вт' | 'Ср' | 'Чт' | 'Пт' | 'Сб' | 'Вс';
-
-// Исправляем интерфейс WeeklyStats - убираем конфликтующие свойства
-export interface WeeklyStats {
-  Пн: number;
-  Вт: number;
-  Ср: number;
-  Чт: number;
-  Пт: number;
-  Сб: number;
-  Вс: number;
-}
-
-export interface WeeklyStatsWithMeta extends WeeklyStats {
-  weekKey: string;
-  totalScore: number;
-}
-
+// ========== СОТРУДНИКИ ==========
 export interface Employee {
   id: number;
   fullName: string;

@@ -1,4 +1,3 @@
-// frontend/src/stores/game.ts
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import gameApi from '../api/game';
