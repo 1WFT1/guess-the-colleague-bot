@@ -23,7 +23,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    // Добавьте, чтобы Vite правильно обрабатывал статические ассеты
     assetsDir: 'assets',
     rollupOptions: {
       output: {
