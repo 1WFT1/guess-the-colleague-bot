@@ -1,19 +1,26 @@
+/**
+ * Хук для управления статистикой в админ-панели
+ * Загружает данные из бэкенда и вычисляет агрегированные показатели
+ */
+
 import { ref, onMounted } from 'vue';
 import type { Employee } from '../types/game';
 import gameApi from '../api/game';
 
+// Структура статистики для отображения в админ-панели
 interface GameStats {
-  totalPlayers: number;
-  activeToday: number;
-  totalQuestions: number;
-  averageScore: number;
-  totalGames: number;
-  topPlayer: {
+  totalPlayers: number;      // Всего зарегистрированных игроков
+  activeToday: number;       // Активных за последние 24 часа
+  totalQuestions: number;    // Всего отвеченных вопросов
+  averageScore: number;      // Средний балл среди всех игроков
+  totalGames: number;        // Всего сыгранных игр (сессий)
+  topPlayer: {               // Лучший игрок по очкам
     name: string;
     score: number;
   } | null;
 }
 
+// Статистика отдельного пользователя (получаем из API)
 interface UserStats {
   telegramId: number;
   fullName: string;
@@ -40,7 +47,9 @@ export function useAdminStats() {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  // Получение всех пользователей из бэкенда
+  /**
+   * Получение всех пользователей из бэкенда
+   */
   const getAllUsers = async (): Promise<UserStats[]> => {
     try {
       const response = await gameApi.getAllUsers();
@@ -51,7 +60,10 @@ export function useAdminStats() {
     }
   };
 
-  // Подсчет активных сегодня (из бэкенда)
+  /**
+   * Подсчет активных пользователей за последние 24 часа
+   * Сравнивает lastActive с текущей датой
+   */
   const getActiveToday = (users: UserStats[]): number => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -65,24 +77,33 @@ export function useAdminStats() {
     return active.length;
   };
 
-  // Подсчет общего количества вопросов
+  /**
+   * Подсчет общего количества отвеченных вопросов
+   * Суммирует correctAnswers + wrongAnswers по всем пользователям
+   */
   const getTotalQuestions = (users: UserStats[]): number => {
     return users.reduce((sum, user) => sum + (user.correctAnswers + user.wrongAnswers), 0);
   };
 
-  // Подсчет среднего балла
+  /**
+   * Подсчет среднего балла среди всех игроков
+   */
   const getAverageScore = (users: UserStats[]): number => {
     if (users.length === 0) return 0;
     const totalScore = users.reduce((sum, user) => sum + user.totalScore, 0);
     return Math.round(totalScore / users.length);
   };
 
-  // Подсчет общего количества игр
+  /**
+   * Подсчет общего количества сыгранных игр (сессий)
+   */
   const getTotalGames = (users: UserStats[]): number => {
     return users.reduce((sum, user) => sum + user.gamesPlayed, 0);
   };
 
-  // Поиск лучшего игрока
+  /**
+   * Поиск лучшего игрока по общему количеству очков
+   */
   const getTopPlayer = (users: UserStats[]): { name: string; score: number } | null => {
     if (users.length === 0) return null;
     
@@ -95,7 +116,10 @@ export function useAdminStats() {
     };
   };
 
-  // Обновление всей статистики из бэкенда
+  /**
+   * Обновление всей статистики из бэкенда
+   * Вызывается при загрузке админ-панели и при нажатии кнопки "Обновить"
+   */
   const updateStats = async (employees: Employee[] = []) => {
     isLoading.value = true;
     error.value = null;
@@ -121,25 +145,30 @@ export function useAdminStats() {
     }
   };
 
-  // Обновление из списка сотрудников
+  /**
+   * Обновление статистики из списка сотрудников
+   * Вызывается после загрузки/изменения сотрудников
+   */
   const updateFromEmployees = (employees: Employee[]) => {
     updateStats(employees);
   };
 
-  // Принудительное обновление
+  /**
+   * Принудительное обновление статистики
+   */
   const refresh = () => {
     updateStats();
   };
 
-  // Инициализация при монтировании
+  // Инициализация при монтировании компонента
   onMounted(() => {
     updateStats();
   });
 
   return {
-    stats,
-    isLoading,
-    error,
+    stats,           // Реактивные данные статистики
+    isLoading,       // Флаг загрузки
+    error,           // Ошибка при загрузке
     updateFromEmployees,
     refresh
   };

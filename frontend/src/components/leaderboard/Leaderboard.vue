@@ -71,7 +71,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import Mascot from './../common/Mascot.vue';
-import { getInitials } from '../../utils/formatters';
 import gameApi from '../../api/game';
 
 interface LeaderboardPlayer {
@@ -180,6 +179,19 @@ const mascotMessage = computed(() => {
   return 'Соревнуйся с коллегами и попади в топ-10!';
 });
 
+const getInitials = (name: string): string => {
+  if (!name || name.length === 0) return 'U';
+  
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    const first = parts[0]?.[0] || '';
+    const second = parts[1]?.[0] || '';
+    if (first && second) return (first + second).toUpperCase();
+  }
+  
+  return name[0]?.toUpperCase() || 'U';
+};
+
 const getLeaderboardItemClass = (index: number, userId: number): string => {
   const classes = [];
   if (index === 0) classes.push('top-1');
@@ -281,7 +293,6 @@ onMounted(() => {
   padding: 15px 20px;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
-   display: none;
 }
 
 .tab-btn {

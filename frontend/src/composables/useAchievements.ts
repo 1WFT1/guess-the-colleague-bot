@@ -1,17 +1,22 @@
-// composables/useAchievements.ts
+/**
+ * Хук для управления достижениями игрока
+ * Автоматически отслеживает прогресс и показывает уведомления при разблокировке
+ */
+
 import { ref, watch } from 'vue';
 import type { GameStore } from '../stores/game';
 
 export interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  condition: (store: any) => boolean;
-  unlocked: boolean;
+  id: string;           // Уникальный идентификатор достижения
+  name: string;         // Название достижения
+  description: string;  // Описание условия получения
+  icon: string;         // Эмодзи иконка
+  condition: (store: any) => boolean; // Функция проверки условия
+  unlocked: boolean;    // Разблокировано ли достижение
 }
 
 export function useAchievements() {
+  // Список всех достижений с условиями разблокировки
   const achievements = ref<Achievement[]>([
     {
       id: 'first_blood',
@@ -95,6 +100,9 @@ export function useAchievements() {
     }
   ]);
 
+  /**
+   * Показать всплывающее уведомление о разблокировке достижения
+   */
   const showNotification = (achievement: Achievement) => {
     const notification = document.createElement('div');
     notification.className = 'achievement-toast';
@@ -117,6 +125,7 @@ export function useAchievements() {
     }, 4000);
   };
 
+  /** Загрузить разблокированные достижения из localStorage */
   const loadUnlocked = () => {
     const saved = localStorage.getItem('guess_colleague_achievements');
     if (saved) {
@@ -129,32 +138,44 @@ export function useAchievements() {
     }
   };
 
+  /** Сохранить разблокированные достижения в localStorage */
   const saveUnlocked = () => {
     const unlockedIds = achievements.value.filter(ach => ach.unlocked).map(ach => ach.id);
     localStorage.setItem('guess_colleague_achievements', JSON.stringify(unlockedIds));
   };
 
+  /**
+   * Проверить и разблокировать достижения на основе текущей статистики
+   * Вызывается после каждого действия игрока
+   */
   const checkAchievements = (gameStore: any) => {
     let changed = false;
     achievements.value.forEach(ach => {
       if (!ach.unlocked && ach.condition(gameStore)) {
         ach.unlocked = true;
         changed = true;
-        showNotification(ach);
+        showNotification(ach);  // Показываем уведомление о новом достижении
       }
     });
     if (changed) saveUnlocked();
   };
 
+  /** Количество разблокированных достижений */
   const getUnlockedCount = () => achievements.value.filter(ach => ach.unlocked).length;
+  
+  /** Общее количество достижений */
   const getTotalCount = () => achievements.value.length;
+  
+  /** Прогресс в процентах */
   const getProgress = () => Math.round((getUnlockedCount() / getTotalCount()) * 100);
 
+  /** Сбросить все достижения (для тестирования) */
   const resetAchievements = () => {
     achievements.value.forEach(ach => ach.unlocked = false);
     saveUnlocked();
   };
 
+  /** Добавить CSS стили для уведомлений */
   const addStyles = () => {
     if (document.getElementById('achievement-styles')) return;
     const style = document.createElement('style');
@@ -181,13 +202,14 @@ export function useAchievements() {
       }
       .achievement-toast-icon { font-size: 40px; }
       .achievement-toast-info { display: flex; flex-direction: column; }
-      .achievement-toast-title { font-size: 11px; color: #ffd700; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+      .achievement-toast-title { font-size: 11px; color: #ffd700; font-weight: bold; text-transform: uppercase; }
       .achievement-toast-name { font-size: 16px; color: white; font-weight: bold; }
       .achievement-toast-desc { font-size: 11px; color: #aaa; }
     `;
     document.head.appendChild(style);
   };
 
+  // Инициализация
   loadUnlocked();
   addStyles();
 

@@ -1,4 +1,3 @@
-<!-- components/game/GameBoard.vue -->
 <template>
   <div class="game-board">
     <!-- Переключатель режимов игры -->

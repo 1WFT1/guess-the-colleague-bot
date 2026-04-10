@@ -1,4 +1,3 @@
-<!-- components/PlayerStats.vue - упрощенная версия без недельной статистики -->
 <template>
   <div class="stats-modal" @click.self="$emit('close')">
     <div class="stats-content">
