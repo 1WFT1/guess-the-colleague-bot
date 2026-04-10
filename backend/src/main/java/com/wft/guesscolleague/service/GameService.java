@@ -12,8 +12,10 @@ import com.wft.guesscolleague.model.QuestionAttempt;
 import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.repository.GameSessionRepository;
 import com.wft.guesscolleague.repository.QuestionAttemptRepository;
+import com.wft.guesscolleague.service.TelegramUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,19 +36,16 @@ public class GameService {
     private final GameSessionRepository sessionRepository;
     private final QuestionAttemptRepository attemptRepository;
     private final ObjectMapper objectMapper;
-    private final TelegramUserService telegramUserService;  // Добавить
+    private final TelegramUserService telegramUserService;
 
     /**
      * Создает новую игровую сессию
      */
     @Transactional
-    public GameSession createSession(Long userId, Long chatId) {
-        log.info("Creating session for user: {}", userId);
+    public GameSession createSession(Long userId, Long chatId, String gameMode) {
+        log.info("Creating session for user: {} with gameMode: {}", userId, gameMode);
 
-        // Регистрируем пользователя (без данных, они придут с фронтенда)
-        telegramUserService.registerOrUpdateUser(userId);
-
-        // Увеличиваем счетчик игр
+        TelegramUser user = telegramUserService.getUserStats(userId);
         telegramUserService.incrementGamesPlayed(userId);
 
         // Закрываем старые сессии
@@ -55,21 +54,22 @@ public class GameService {
             GameSession old = oldSessionOpt.get();
             old.setActive(false);
             sessionRepository.save(old);
-            log.info("Closed old session: {}", old.getId());
         }
 
-        // Создаем новую сессию с нулевыми очками
         GameSession session = new GameSession();
         session.setUserId(userId);
         session.setChatId(chatId);
         session.setLastActivity(LocalDateTime.now());
-        session.setTotalScore(0);
-        session.setCorrectAnswers(0);
-        session.setWrongAnswers(0);
+        session.setTotalScore(user.getTotalScore());
+        session.setCorrectAnswers(user.getCorrectAnswers());
+        session.setWrongAnswers(user.getWrongAnswers());
+        session.setCurrentStreak(user.getCurrentStreak());
+        session.setBestStreak(user.getBestStreak());
         session.setActive(true);
+        session.setGameMode(gameMode);  // <-- КЛЮЧЕВОЕ: сохраняем режим
 
         GameSession saved = sessionRepository.save(session);
-        log.info("Created new session: {} with score 0", saved.getId());
+        log.info("Created session: {} with gameMode: {}", saved.getId(), gameMode);
         return saved;
     }
 
@@ -85,100 +85,110 @@ public class GameService {
      * @param sessionId ID игровой сессии
      * @return DTO с вопросом (фото + варианты ответов)
      */
-    @Transactional
     public QuestionDTO generateNextQuestion(UUID sessionId) {
-        log.info("Generating next question for session: {}", sessionId);
-
-        // Проверяем существование сессии
         GameSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> {
-                    log.error("Session not found: {}", sessionId);
-                    return new IllegalArgumentException("Session not found");
-                });
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
-        // Проверяем активность сессии
-        if (!session.isActive()) {
-            log.error("Session is not active: {}", sessionId);
-            throw new IllegalStateException("Session is not active");
+        String gameMode = session.getGameMode();
+        log.info("Generating question for session: {} with gameMode: {}", sessionId, gameMode);
+
+        if ("department".equals(gameMode)) {
+            log.info("Generating DEPARTMENT question");
+            return generateDepartmentQuestion(session);
+        } else {
+            log.info("Generating NAME question");
+            return generateNameQuestion(session);
+        }
+    }
+
+    private QuestionDTO generateNameQuestion(GameSession session) {
+        Employee correctEmployee = employeeService.getRandomActiveEmployee();
+        List<Employee> distractors = employeeService.getRandomActiveEmployees(correctEmployee.getId(), 3);
+
+        List<Map<String, Object>> options = new ArrayList<>();
+
+        Map<String, Object> correctOption = new HashMap<>();
+        correctOption.put("employeeId", correctEmployee.getId().toString());
+        correctOption.put("fullName", correctEmployee.getFullName());
+        options.add(correctOption);
+
+        for (Employee d : distractors) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("employeeId", d.getId().toString());
+            option.put("fullName", d.getFullName());
+            options.add(option);
         }
 
-        // Проверяем, что есть достаточно сотрудников (минимум 4 для 1 правильного + 3 дистрактора)
-        long activeEmployeesCount = employeeService.countActiveEmployees();
-        log.info("Active employees count: {}", activeEmployeesCount);
+        Collections.shuffle(options);
 
-        if (activeEmployeesCount < 4) {
-            String error = String.format("Not enough active employees. Need at least 4, but found: %d", activeEmployeesCount);
-            log.error(error);
-            throw new IllegalStateException(error);
-        }
+        QuestionAttempt attempt = new QuestionAttempt();
+        attempt.setSession(session);
+        attempt.setEmployee(correctEmployee);
+        attempt.setQuestionType("name");  // Важно: устанавливаем тип
 
         try {
-            // 1. Выбираем случайного сотрудника (правильный ответ)
-            Employee correctEmployee = employeeService.getRandomActiveEmployee();
-            log.info("Correct employee: {} (ID: {})", correctEmployee.getFullName(), correctEmployee.getId());
-
-            // 2. Выбираем 3 случайных дистрактора (неправильные варианты)
-            List<Employee> distractors = employeeService.getRandomActiveEmployees(
-                    correctEmployee.getId(), 3);
-            log.info("Found {} distractors", distractors.size());
-
-            // 3. Создаем список вариантов ответов
-            List<Map<String, Object>> options = new ArrayList<>();
-
-            // Добавляем правильный ответ
-            Map<String, Object> correctOption = new HashMap<>();
-            correctOption.put("employeeId", correctEmployee.getId().toString());
-            correctOption.put("fullName", correctEmployee.getFullName());
-            options.add(correctOption);
-
-            // Добавляем дистракторов
-            for (Employee d : distractors) {
-                Map<String, Object> option = new HashMap<>();
-                option.put("employeeId", d.getId().toString());
-                option.put("fullName", d.getFullName());
-                options.add(option);
-            }
-
-            // Перемешиваем варианты в случайном порядке
-            Collections.shuffle(options);
-            log.info("Shuffled options count: {}", options.size());
-
-            // 4. Сохраняем вопрос в БД
-            QuestionAttempt attempt = new QuestionAttempt();
-            attempt.setSession(session);
-            attempt.setEmployee(correctEmployee);
-
-            // Сохраняем варианты как JSON (для последующей проверки)
-            try {
-                String optionsJson = objectMapper.writeValueAsString(options);
-                attempt.setOptions(optionsJson);
-                log.info("Saved options JSON: {}", optionsJson);
-            } catch (JsonProcessingException e) {
-                log.error("Failed to serialize options", e);
-                throw new RuntimeException("Failed to serialize options", e);
-            }
-
-            attemptRepository.save(attempt);
-            log.info("Saved question attempt: {}", attempt.getId());
-
-            // 5. Формируем DTO для фронтенда
-            List<String> optionNames = options.stream()
-                    .map(opt -> (String) opt.get("fullName"))
-                    .collect(Collectors.toList());
-
-            QuestionDTO dto = new QuestionDTO(
-                    attempt.getId(),
-                    correctEmployee.getPhotoUrl(),
-                    optionNames
-            );
-
-            log.info("Generated question DTO: {}", dto);
-            return dto;
-
-        } catch (Exception e) {
-            log.error("Error generating question", e);
-            throw new RuntimeException("Failed to generate question: " + e.getMessage(), e);
+            String optionsJson = objectMapper.writeValueAsString(options);
+            attempt.setOptions(optionsJson);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize options", e);
+            throw new RuntimeException("Failed to serialize options", e);
         }
+
+        attemptRepository.save(attempt);
+
+        List<String> optionNames = options.stream()
+                .map(opt -> (String) opt.get("fullName"))
+                .collect(Collectors.toList());
+
+        return new QuestionDTO(attempt.getId(), correctEmployee.getPhotoUrl(), optionNames);
+    }
+
+    private QuestionDTO generateDepartmentQuestion(GameSession session) {
+        Employee correctEmployee = employeeService.getRandomActiveEmployee();
+        String correctDepartment = correctEmployee.getDepartment();
+
+        // Получаем все уникальные отделы
+        List<String> allDepartments = employeeService.getAllActiveEmployees()
+                .stream()
+                .map(Employee::getDepartment)
+                .filter(dept -> dept != null && !dept.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
+
+        List<String> options = new ArrayList<>();
+        options.add(correctDepartment);
+
+        List<String> otherDepartments = allDepartments.stream()
+                .filter(d -> !d.equals(correctDepartment))
+                .collect(Collectors.toList());
+
+        Collections.shuffle(otherDepartments);
+        for (int i = 0; i < Math.min(3, otherDepartments.size()); i++) {
+            options.add(otherDepartments.get(i));
+        }
+
+        while (options.size() < 4) {
+            options.add("Другой отдел");
+        }
+
+        Collections.shuffle(options);
+
+        QuestionAttempt attempt = new QuestionAttempt();
+        attempt.setSession(session);
+        attempt.setEmployee(correctEmployee);
+        attempt.setQuestionType("department");
+
+        try {
+            String optionsJson = objectMapper.writeValueAsString(options);
+            attempt.setOptions(optionsJson);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize options", e);
+            throw new RuntimeException("Failed to serialize options", e);
+        }
+
+        attemptRepository.save(attempt);
+
+        return new QuestionDTO(attempt.getId(), correctEmployee.getPhotoUrl(), options);
     }
 
     /**
@@ -196,74 +206,161 @@ public class GameService {
     @Transactional
     public AnswerResponse processAnswer(AnswerRequest request) {
         log.info("Processing answer for question: {}", request.getQuestionId());
-        // Находим вопрос по ID
+
         QuestionAttempt attempt = attemptRepository.findById(request.getQuestionId())
                 .orElseThrow(() -> new IllegalArgumentException("Question attempt not found"));
 
-        // Проверяем, что на вопрос еще не отвечали (защита от повторной отправки)
         if (attempt.getIsCorrect() != null) {
             throw new IllegalStateException("Question already answered");
         }
 
-        // Восстанавливаем варианты ответов из JSON
-        List<Map<String, Object>> options;
-        try {
-            options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<Map<String, Object>>>() {});
-            log.info("Parsed {} options", options.size());
-        } catch (JsonProcessingException e) {
-            log.error("Failed to parse options", e);
-            throw new RuntimeException("Failed to parse options", e);
+        String questionType = attempt.getQuestionType();
+        if (questionType == null) {
+            questionType = "name";
         }
 
-        // Проверяем корректность индекса ответа
-        if (request.getSelectedOptionIndex() < 0 || request.getSelectedOptionIndex() >= options.size()) {
-            throw new IllegalArgumentException("Invalid option index");
+        log.info("Question type: {}", questionType);
+
+        boolean isCorrect;
+        String correctAnswerText;
+
+        if ("department".equals(questionType)) {
+            // ========== ЛОГИКА ДЛЯ ВОПРОСОВ ОБ ОТДЕЛАХ ==========
+            List<String> options;
+            try {
+                options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<String>>() {});
+                log.info("Parsed {} department options: {}", options.size(), options);
+            } catch (JsonProcessingException e) {
+                log.error("Failed to parse department options", e);
+                throw new RuntimeException("Failed to parse options", e);
+            }
+
+            if (request.getSelectedOptionIndex() < 0 || request.getSelectedOptionIndex() >= options.size()) {
+                throw new IllegalArgumentException("Invalid option index");
+            }
+
+            String selectedDepartment = options.get(request.getSelectedOptionIndex());
+            String correctDepartment = attempt.getEmployee().getDepartment();
+
+            isCorrect = correctDepartment.equals(selectedDepartment);
+            correctAnswerText = correctDepartment;
+
+            log.info("Department answer - Correct: {}, Selected: {}", correctDepartment, selectedDepartment);
+
+        } else {
+            // ========== ЛОГИКА ДЛЯ ВОПРОСОВ ОБ ИМЕНАХ ==========
+            List<Map<String, Object>> options;
+            try {
+                options = objectMapper.readValue(attempt.getOptions(), new TypeReference<List<Map<String, Object>>>() {});
+                log.info("Parsed {} name options", options.size());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to parse name options", e);
+                throw new RuntimeException("Failed to parse options", e);
+            }
+
+            if (request.getSelectedOptionIndex() < 0 || request.getSelectedOptionIndex() >= options.size()) {
+                throw new IllegalArgumentException("Invalid option index");
+            }
+
+            UUID correctEmployeeId = attempt.getEmployee().getId();
+            String selectedEmployeeIdStr = (String) options.get(request.getSelectedOptionIndex()).get("employeeId");
+            UUID selectedEmployeeId = UUID.fromString(selectedEmployeeIdStr);
+
+            isCorrect = correctEmployeeId.equals(selectedEmployeeId);
+            correctAnswerText = attempt.getEmployee().getFullName();
+
+            log.info("Name answer - Correct: {}, Selected: {}", correctEmployeeId, selectedEmployeeId);
         }
 
-        // Сравниваем выбранный вариант с правильным ответом
-        UUID correctEmployeeId = attempt.getEmployee().getId();
-        String selectedEmployeeIdStr = (String) options.get(request.getSelectedOptionIndex()).get("employeeId");
-        UUID selectedEmployeeId = UUID.fromString(selectedEmployeeIdStr);
-        boolean isCorrect = correctEmployeeId.equals(selectedEmployeeId);
-
-        log.info("Answer check - Correct: {}, Selected: {}", correctEmployeeId, selectedEmployeeId);
-
-        // Рассчитываем изменение баллов (+5 за правильный, -6 за неправильный)
-        int pointsDelta = isCorrect ? 5 : -6;
-
-        // Обновляем сессию
+        // ========== ОБЩАЯ ЛОГИКА НАЧИСЛЕНИЯ ОЧКОВ ==========
         GameSession session = attempt.getSession();
-        session.addScore(pointsDelta);  // Добавляем/списываем баллы
+        int currentScore = session.getTotalScore();
+        int pointsDelta;
+        String message;
 
         if (isCorrect) {
-            session.incrementCorrect();  // Увеличиваем счетчик правильных ответов
+            pointsDelta = 5;
+            int newScore = currentScore + pointsDelta;
+            session.setTotalScore(newScore);
+            session.incrementCorrect();
+
+            int newStreak = session.getCurrentStreak() + 1;
+            session.setCurrentStreak(newStreak);
+            if (newStreak > session.getBestStreak()) {
+                session.setBestStreak(newStreak);
+            }
+
+            message = "Верно! +5 баллов";
+            log.info("Correct answer! +5 points. New score: {}", session.getTotalScore());
         } else {
-            session.incrementWrong();    // Увеличиваем счетчик неправильных ответов
+            if (currentScore >= 6) {
+                pointsDelta = -6;
+                int newScore = currentScore + pointsDelta;
+                session.setTotalScore(newScore);
+                message = "Ошибка! -6 баллов. Правильно: " + correctAnswerText;
+                log.info("Wrong answer! -6 points. New score: {}", session.getTotalScore());
+            } else if (currentScore > 0 && currentScore < 6) {
+                pointsDelta = -currentScore;
+                session.setTotalScore(0);
+                message = "Ошибка! -" + currentScore + " баллов. Правильно: " + correctAnswerText;
+                log.info("Wrong answer! -{} points (had only {}). New score: 0", currentScore, currentScore);
+            } else {
+                pointsDelta = 0;
+                session.setTotalScore(0);
+                message = "Ошибка! Правильно: " + correctAnswerText + " (у вас 0 очков, штраф не применен)";
+                log.info("Wrong answer! No points to deduct. Score remains 0");
+            }
+            session.setCurrentStreak(0);
+            session.incrementWrong();
         }
 
         session.setLastActivity(LocalDateTime.now());
         sessionRepository.save(session);
 
-        // Сохраняем результат попытки
+        telegramUserService.updateScore(session.getUserId(), session.getTotalScore());
+
         attempt.setSelectedOption(request.getSelectedOptionIndex());
         attempt.setIsCorrect(isCorrect);
         attempt.setPointsDelta(pointsDelta);
         attemptRepository.save(attempt);
 
-        // Формируем сообщение для пользователя
-        String message = isCorrect ?
-                "Верно! +5 баллов" :
-                "Ошибка! -6 баллов. Правильно: " + attempt.getEmployee().getFullName();
-
-        log.info("Answer processed. Correct: {}, Points: {}, New score: {}",
+        log.info("Answer processed. Correct: {}, PointsDelta: {}, New score: {}",
                 isCorrect, pointsDelta, session.getTotalScore());
 
         return new AnswerResponse(
                 isCorrect,
                 pointsDelta,
                 session.getTotalScore(),
-                attempt.getEmployee().getFullName(),
+                correctAnswerText,
                 message
         );
     }
+
+    // Очистка старых неактивных сессий (старше 7 дней)
+    @Scheduled(cron = "0 0 3 * * ?") // Каждый день в 3 часа ночи
+    @Transactional
+    public void cleanupOldSessions() {
+        LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
+        int deleted = sessionRepository.deleteOldInactiveSessions(weekAgo);
+        log.info("Deleted {} old inactive sessions", deleted);
+    }
+
+    // Очистка старых вопросов (старше 30 дней)
+    @Scheduled(cron = "0 0 4 * * ?")
+    @Transactional
+    public void cleanupOldQuestions() {
+        LocalDateTime monthAgo = LocalDateTime.now().minusDays(30);
+        int deleted = attemptRepository.deleteOldAttempts(monthAgo);
+        log.info("Deleted {} old question attempts", deleted);
+    }
+
+    @Transactional
+    public void updateGameMode(UUID sessionId, String gameMode) {
+        GameSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        session.setGameMode(gameMode);
+        sessionRepository.save(session);
+        log.info("Updated session {} gameMode to {}", sessionId, gameMode);
+    }
+
 }

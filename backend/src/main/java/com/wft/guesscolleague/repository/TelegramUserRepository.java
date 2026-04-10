@@ -21,10 +21,29 @@ public interface TelegramUserRepository extends JpaRepository<TelegramUser, UUID
 
     List<TelegramUser> findByIsAdminTrue();
 
+    // Метод обновления счета
     @Modifying
     @Transactional
-    @Query("UPDATE TelegramUser u SET u.totalScore = u.totalScore + :points, u.lastActive = CURRENT_TIMESTAMP WHERE u.telegramId = :telegramId")
-    void addScore(@Param("telegramId") Long telegramId, @Param("points") int points);
+    @Query("UPDATE TelegramUser u SET u.totalScore = :score, u.lastActive = CURRENT_TIMESTAMP WHERE u.telegramId = :telegramId")
+    void updateScore(@Param("telegramId") Long telegramId, @Param("score") int score);
+
+    // Метод обновления полной статистики
+    @Modifying
+    @Transactional
+    @Query("UPDATE TelegramUser u SET " +
+            "u.totalScore = :totalScore, " +
+            "u.correctAnswers = :correctAnswers, " +
+            "u.wrongAnswers = :wrongAnswers, " +
+            "u.currentStreak = :currentStreak, " +
+            "u.bestStreak = :bestStreak, " +
+            "u.lastActive = CURRENT_TIMESTAMP " +
+            "WHERE u.telegramId = :telegramId")
+    void updateStats(@Param("telegramId") Long telegramId,
+                     @Param("totalScore") int totalScore,
+                     @Param("correctAnswers") int correctAnswers,
+                     @Param("wrongAnswers") int wrongAnswers,
+                     @Param("currentStreak") int currentStreak,
+                     @Param("bestStreak") int bestStreak);
 
     @Modifying
     @Transactional
@@ -36,4 +55,9 @@ public interface TelegramUserRepository extends JpaRepository<TelegramUser, UUID
 
     @Query("SELECT COUNT(u) FROM TelegramUser u WHERE u.lastActive > :since")
     long countActiveSince(@Param("since") LocalDateTime since);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE TelegramUser u SET u.gamesPlayed = 0 WHERE u.telegramId = :telegramId")
+    void resetGamesPlayed(@Param("telegramId") Long telegramId);
 }

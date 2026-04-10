@@ -6,26 +6,16 @@
         <button @click="$emit('close')" class="close-btn">✕</button>
       </div>
       
-      <div class="leaderboard-tabs">
-        <button 
-          :class="['tab-btn', { active: activeTab === 'global' }]"
-          @click="activeTab = 'global'"
-        >
-          🌍 Глобальный
-        </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'weekly' }]"
-          @click="activeTab = 'weekly'"
-        >
-          📅 За неделю
-        </button>
+      <div v-if="isLoading" class="loading-state">
+        <div class="loader"></div>
+        <p>Загрузка рейтинга...</p>
       </div>
       
-      <div class="leaderboard-list">
+      <div v-else class="leaderboard-list">
         <div 
-          v-for="(player, index) in displayedLeaderboard" 
-          :key="player.userId"
-          :class="['leaderboard-item', getLeaderboardItemClass(index, player.userId)]"
+          v-for="(player, index) in leaderboard" 
+          :key="player.telegramId"
+          :class="['leaderboard-item', getLeaderboardItemClass(index, player.telegramId)]"
         >
           <div class="rank">
             <span v-if="index === 0">🥇</span>
@@ -39,13 +29,15 @@
             <div class="player-stats">
               <span>{{ player.totalScore }} баллов</span>
               <span>•</span>
-              <span>Точность: {{ player.accuracy }}%</span>
+              <span>Точность: {{ getAccuracy(player) }}%</span>
+              <span>•</span>
+              <span>Игр: {{ player.gamesPlayed }}</span>
             </div>
           </div>
           <div class="score">{{ player.totalScore }}</div>
         </div>
         
-        <div v-if="displayedLeaderboard.length === 0" class="empty-state">
+        <div v-if="leaderboard.length === 0" class="empty-state">
           <div class="empty-icon">🏆</div>
           <p>Пока нет игроков в рейтинге</p>
           <p class="empty-hint">Сыграйте первую игру, чтобы попасть в таблицу лидеров!</p>
@@ -55,7 +47,7 @@
       <div v-if="currentUser" class="current-user-rank">
         <div class="rank-badge">
           <span class="rank-icon">📍</span>
-          ВАША ПОЗИЦИЯ: {{ currentUser.rank || '—' }} место
+          ВАША ПОЗИЦИЯ: {{ currentUser.rank }} место
         </div>
         <div class="user-score">Ваши баллы: {{ currentUser.totalScore }}</div>
         <div v-if="currentUser.toTop && currentUser.toTop > 0" class="to-top">
@@ -78,19 +70,18 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import Mascot from './Mascot.vue';
-import { getInitials } from '../utils/formatters';
+import Mascot from './../common/Mascot.vue';
+import { getInitials } from '../../utils/formatters';
+import gameApi from '../../api/game';
 
-// Расширенный интерфейс игрока для лидерборда
 interface LeaderboardPlayer {
-  userId: number;
+  telegramId: number;
   fullName: string;
   totalScore: number;
-  accuracy: number;
+  gamesPlayed: number;
+  correctAnswers: number;
+  wrongAnswers: number;
   rank?: number;
-  correctCount?: number;
-  wrongCount?: number;
-  totalQuestions?: number;
 }
 
 interface CurrentUserWithTop extends LeaderboardPlayer {
@@ -107,102 +98,56 @@ const emit = defineEmits<{
   'show-stats': [];
 }>();
 
-const activeTab = ref<'global' | 'weekly'>('global');
+const isLoading = ref(true);
+const allUsers = ref<LeaderboardPlayer[]>([]);
 
-// Функции для загрузки данных
-const loadGlobalLeaderboard = (): LeaderboardPlayer[] => {
-  const allPlayersKey = 'guess_colleague_all_players_v1';
-  const saved = localStorage.getItem(allPlayersKey);
-  
-  if (saved) {
-    try {
-      const players = JSON.parse(saved);
-      // Группируем по userId
-      const userMap = new Map<number, LeaderboardPlayer>();
-      
-      players.forEach((player: any) => {
-        const existing = userMap.get(player.userId);
-        if (existing) {
-          existing.totalScore += player.totalScore;
-          // Обновляем счетчики вопросов
-          existing.correctCount = (existing.correctCount || 0) + (player.correctCount || 0);
-          existing.wrongCount = (existing.wrongCount || 0) + (player.wrongCount || 0);
-          existing.totalQuestions = (existing.totalQuestions || 0) + (player.correctCount || 0) + (player.wrongCount || 0);
-          // Пересчитываем точность
-          const total = (existing.totalQuestions || 1);
-          existing.accuracy = Math.round(((existing.correctCount || 0) / total) * 100);
-        } else {
-          const correctCount = player.correctCount || 0;
-          const wrongCount = player.wrongCount || 0;
-          const totalQuestions = correctCount + wrongCount;
-          userMap.set(player.userId, {
-            userId: player.userId,
-            fullName: player.fullName || `Игрок ${player.userId}`,
-            totalScore: player.totalScore,
-            accuracy: player.accuracy || 0,
-            correctCount: correctCount,
-            wrongCount: wrongCount,
-            totalQuestions: totalQuestions
-          });
-        }
-      });
-      
-      const playersList = Array.from(userMap.values());
-      playersList.sort((a, b) => b.totalScore - a.totalScore);
-      return playersList.map((p, idx) => ({ ...p, rank: idx + 1 }));
-    } catch (e) {
-      console.error('Failed to load global leaderboard', e);
-    }
+// Расчет точности
+const getAccuracy = (player: LeaderboardPlayer): number => {
+  const total = player.correctAnswers + player.wrongAnswers;
+  if (total === 0) return 0;
+  return Math.round((player.correctAnswers / total) * 100);
+};
+
+// Загрузка всех пользователей из бэкенда
+const loadLeaderboard = async () => {
+  isLoading.value = true;
+  try {
+    const users = await gameApi.getAllUsers();
+    
+    // Преобразуем и сортируем по очкам
+    const sorted = users
+      .map((user: any) => ({
+        telegramId: user.telegramId,
+        fullName: user.fullName,
+        totalScore: user.totalScore,
+        gamesPlayed: user.gamesPlayed,
+        correctAnswers: user.correctAnswers,
+        wrongAnswers: user.wrongAnswers
+      }))
+      .sort((a: LeaderboardPlayer, b: LeaderboardPlayer) => b.totalScore - a.totalScore);
+    
+    // Добавляем ранги
+    allUsers.value = sorted.map((user: LeaderboardPlayer, idx: number) => ({
+      ...user,
+      rank: idx + 1
+    }));
+    
+    console.log('Leaderboard loaded:', allUsers.value);
+  } catch (err) {
+    console.error('Failed to load leaderboard:', err);
+  } finally {
+    isLoading.value = false;
   }
-  return [];
 };
 
-const loadWeeklyLeaderboard = (): LeaderboardPlayer[] => {
-  // Для недельного рейтинга используем данные из недельной статистики
-  const weekKey = getCurrentWeekKey();
-  const weeklyStatsKey = `weekly_stats_${weekKey}`;
-  const saved = localStorage.getItem(weeklyStatsKey);
-  
-  if (saved) {
-    try {
-      const stats = JSON.parse(saved);
-      if (stats.players) {
-        return stats.players.sort((a: LeaderboardPlayer, b: LeaderboardPlayer) => b.totalScore - a.totalScore)
-          .map((p: LeaderboardPlayer, idx: number) => ({ ...p, rank: idx + 1 }));
-      }
-    } catch (e) {
-      console.error('Failed to load weekly leaderboard', e);
-    }
-  }
-  return loadGlobalLeaderboard().slice(0, 50); // Fallback to global
-};
-
-const getCurrentWeekKey = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const weekNumber = getWeekNumber(now);
-  return `${year}_${weekNumber}`;
-};
-
-const getWeekNumber = (date: Date): number => {
-  const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-  const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
-  return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-};
-
-const globalLeaderboard = ref<LeaderboardPlayer[]>([]);
-const weeklyLeaderboard = ref<LeaderboardPlayer[]>([]);
-
-const displayedLeaderboard = computed(() => {
-  return activeTab.value === 'global' ? globalLeaderboard.value : weeklyLeaderboard.value;
-});
+// Глобальный лидерборд (все пользователи)
+const leaderboard = computed(() => allUsers.value);
 
 const currentUser = computed<CurrentUserWithTop | null>(() => {
-  const players = displayedLeaderboard.value;
-  const user = players.find(p => p.userId === props.currentUserId);
+  const user = allUsers.value.find(p => p.telegramId === props.currentUserId);
   
-  if (user) {
-    const top10Score = players[9]?.totalScore || 0;
+  if (user && user.rank) {
+    const top10Score = allUsers.value[9]?.totalScore || 0;
     const toTop = top10Score - user.totalScore;
     return {
       ...user,
@@ -214,21 +159,21 @@ const currentUser = computed<CurrentUserWithTop | null>(() => {
 
 const progressPercentage = computed(() => {
   if (!currentUser.value) return 0;
-  const topScore = displayedLeaderboard.value[0]?.totalScore || 1;
+  const topScore = allUsers.value[0]?.totalScore || 1;
   return (currentUser.value.totalScore / topScore) * 100;
 });
 
 const mascotMood = computed(() => {
-  if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 10) return 'happy';
-  if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 20) return 'neutral';
+  if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 3) return 'happy';
+  if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 10) return 'neutral';
   return 'thinking';
 });
 
 const mascotMessage = computed(() => {
-  if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 10) {
-    return 'Отличная работа! Ты в топ-10! Продолжай в том же духе!';
-  } else if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 20) {
-    return `Хороший результат! Ты в топ-20. До топ-10 не хватает ${currentUser.value.toTop} баллов!`;
+  if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 3) {
+    return 'Отличная работа! Ты в топ-3! Продолжай в том же духе!';
+  } else if (currentUser.value && currentUser.value.rank && currentUser.value.rank <= 10) {
+    return `Хороший результат! Ты в топ-10. До топ-3 не хватает ${currentUser.value.toTop} баллов!`;
   } else if (currentUser.value) {
     return `Попробуй сыграть еще раз и войди в топ-10! Не хватает ${currentUser.value.toTop} баллов!`;
   }
@@ -244,17 +189,38 @@ const getLeaderboardItemClass = (index: number, userId: number): string => {
   return classes.join(' ');
 };
 
-const loadData = () => {
-  globalLeaderboard.value = loadGlobalLeaderboard();
-  weeklyLeaderboard.value = loadWeeklyLeaderboard();
-};
-
 onMounted(() => {
-  loadData();
+  loadLeaderboard();
 });
 </script>
 
+
 <style scoped>
+/* Стили остаются те же, плюс добавляем стили для загрузки */
+.loading-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.loader {
+  width: 50px;
+  height: 50px;
+  border: 3px solid #2a2a2a;
+  border-top: 3px solid #4f4ff4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-state p {
+  color: #888;
+}
+
 .leaderboard-modal {
   position: fixed;
   top: 0;
@@ -315,6 +281,7 @@ onMounted(() => {
   padding: 15px 20px;
   background: #1a1a1a;
   border-bottom: 1px solid #2a2a2a;
+   display: none;
 }
 
 .tab-btn {
@@ -364,18 +331,18 @@ onMounted(() => {
 }
 
 .leaderboard-item.top-1 {
-  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
-  border: none;
+  background: linear-gradient(135deg, #b8860b 0%, #daa520 100%);
+  border: 1px solid #ffd700;
 }
 
 .leaderboard-item.top-2 {
-  background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
-  border: none;
+  background: linear-gradient(135deg, #708090 0%, #a9a9a9 100%);
+  border: 1px solid #c0c0c0;
 }
 
 .leaderboard-item.top-3 {
-  background: linear-gradient(135deg, #cd7f32 0%, #e8a75e 100%);
-  border: none;
+  background: linear-gradient(135deg, #8b4513 0%, #cd7f32 100%);
+  border: 1px solid #e8a75e;
 }
 
 .leaderboard-item.top-1 .player-name,
@@ -420,14 +387,12 @@ onMounted(() => {
 
 .player-stats {
   font-size: 12px;
-  color: #888;
+  color: #ffffff;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
-
-.games-count { color: #4f4ff4; }
 
 .score {
   font-weight: bold;

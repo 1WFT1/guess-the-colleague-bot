@@ -92,4 +92,7 @@ public class QuestionAttempt {
     @CreationTimestamp  // Автоматически заполняется Hibernate
     @Column(name = "created_at", updatable = false)  // Нельзя обновить после создания
     private LocalDateTime createdAt;
+
+    @Column(name = "question_type")
+    private String questionType;
 }

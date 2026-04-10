@@ -3,37 +3,41 @@ package com.wft.guesscolleague.controller;
 import com.wft.guesscolleague.model.Employee;
 import com.wft.guesscolleague.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
-/**
- * Контроллер для управления сотрудниками
- * Доступен по адресу: /api/employees
- * Используется в админ-панели для CRUD операций
- */
 @RestController
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Employee Controller", description = "API для управления сотрудниками")
 public class EmployeeController {
 
     private final EmployeeService employeeService;
 
-    /**
-     * Получает количество активных сотрудников
-     * GET /api/employees/count
-     *
-     * @return количество активных сотрудников
-     */
-    @Operation(summary = "Получить количество активных сотрудников")
+    // Для админ-панели - ВСЕ сотрудники
+    @GetMapping
+    public ResponseEntity<List<Employee>> getAllEmployees() {
+        log.info("Getting ALL employees for admin panel");
+        return ResponseEntity.ok(employeeService.getAllEmployees());
+    }
+
+    // Для игры - ТОЛЬКО активные сотрудники (другой путь!)
+    @GetMapping("/active")
+    public ResponseEntity<List<Employee>> getActiveEmployees() {
+        log.info("Getting ACTIVE employees for game");
+        return ResponseEntity.ok(employeeService.getAllActiveEmployees());
+    }
+
     @GetMapping("/count")
     public ResponseEntity<Map<String, Object>> getCount() {
         long count = employeeService.countActiveEmployees();
@@ -44,102 +48,194 @@ public class EmployeeController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Получает список всех активных сотрудников
-     * GET /api/employees
-     *
-     * @return список всех активных сотрудников
-     */
-    @Operation(summary = "Получить всех активных сотрудников")
-    @GetMapping
-    public ResponseEntity<List<Employee>> getAllActive() {
-        return ResponseEntity.ok(employeeService.getAllActiveEmployees());
-    }
-
-    /**
-     * Получает сотрудника по ID
-     * GET /api/employees/{id}
-     *
-     * @param id UUID сотрудника
-     * @return данные сотрудника или 404 если не найден
-     */
-    @Operation(summary = "Получить сотрудника по ID")
     @GetMapping("/{id}")
-    public ResponseEntity<Employee> getEmployee(
-            @Parameter(description = "ID сотрудника", required = true)
-            @PathVariable UUID id) {
-        return employeeService.getAllActiveEmployees().stream()
-                .filter(e -> e.getId().equals(id))
-                .findFirst()
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Создает нового сотрудника
-     * POST /api/employees
-     *
-     * @param employee данные нового сотрудника (fullName, department, photoUrl, isActive)
-     * @return созданный сотрудник с присвоенным ID
-     */
-    @Operation(summary = "Создать нового сотрудника")
-    @PostMapping
-    public ResponseEntity<Employee> createEmployee(@RequestBody Employee employee) {
-        return ResponseEntity.ok(employeeService.saveEmployee(employee));
-    }
-
-    /**
-     * Обновляет данные существующего сотрудника
-     * PUT /api/employees/{id}
-     *
-     * @param id ID сотрудника для обновления
-     * @param employee новые данные сотрудника
-     * @return обновленный сотрудник
-     */
-    @Operation(summary = "Обновить сотрудника")
-    @PutMapping("/{id}")
-    public ResponseEntity<Employee> updateEmployee(
-            @Parameter(description = "ID сотрудника", required = true)
-            @PathVariable UUID id,
-            @RequestBody Employee employee) {
-        employee.setId(id);  // Устанавливаем ID из пути
-        return ResponseEntity.ok(employeeService.saveEmployee(employee));
-    }
-
-    /**
-     * Удаляет сотрудника (мягкое удаление, установка isActive = false)
-     * DELETE /api/employees/{id}
-     *
-     * @param id ID сотрудника для удаления
-     * @return пустой ответ с кодом 200
-     */
-    @Operation(summary = "Удалить сотрудника")
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteEmployee(
-            @Parameter(description = "ID сотрудника", required = true)
-            @PathVariable UUID id) {
-        employeeService.deleteEmployee(id);
-        return ResponseEntity.ok().build();
-    }
-
-    /**
-     * Переключает статус активности сотрудника
-     * PATCH /api/employees/{id}/active
-     *
-     * @param id ID сотрудника
-     * @param body тело запроса с полем isActive (true/false)
-     * @return обновленный сотрудник
-     */
-    @PatchMapping("/{id}/active")
-    public ResponseEntity<Employee> toggleActive(@PathVariable UUID id, @RequestBody Map<String, Boolean> body) {
-        // Загружаем существующего сотрудника из БД
+    public ResponseEntity<Employee> getEmployee(@PathVariable UUID id) {
         Employee employee = employeeService.getEmployeeById(id);
         if (employee == null) {
             return ResponseEntity.notFound().build();
         }
-        // Меняем статус
-        employee.setActive(body.get("isActive"));
-        // Сохраняем
-        return ResponseEntity.ok(employeeService.saveEmployee(employee));
+        return ResponseEntity.ok(employee);
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createEmployee(@RequestBody Map<String, Object> body) {
+        log.info("=== CREATE EMPLOYEE ===");
+        log.info("Received body: {}", body);
+
+        try {
+            Employee employee = new Employee();
+
+            // Проверяем обязательные поля
+            if (!body.containsKey("fullName") || body.get("fullName") == null) {
+                return ResponseEntity.badRequest().body("fullName is required");
+            }
+            employee.setFullName(body.get("fullName").toString());
+
+            employee.setDepartment(body.containsKey("department") && body.get("department") != null ?
+                    body.get("department").toString() : "");
+            employee.setPhotoUrl(body.containsKey("photoUrl") && body.get("photoUrl") != null ?
+                    body.get("photoUrl").toString() : "");
+
+            // Обработка active
+            if (body.containsKey("active") && body.get("active") != null) {
+                Object activeValue = body.get("active");
+                if (activeValue instanceof Boolean) {
+                    employee.setActive((Boolean) activeValue);
+                } else if (activeValue instanceof String) {
+                    employee.setActive(Boolean.parseBoolean((String) activeValue));
+                } else {
+                    employee.setActive(true);
+                }
+            } else {
+                employee.setActive(true);
+            }
+
+            Employee saved = employeeService.saveEmployee(employee);
+            log.info("Created employee: {}", saved.getId());
+            return ResponseEntity.ok(saved);
+
+        } catch (Exception e) {
+            log.error("Error creating employee", e);
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateEmployee(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        log.info("=== UPDATE EMPLOYEE ===");
+        log.info("Updating employee: {}", id);
+        log.info("Received body: {}", body);
+
+        try {
+            Employee existingEmployee = employeeService.getEmployeeById(id);
+            if (existingEmployee == null) {
+                log.error("Employee not found: {}", id);
+                return ResponseEntity.notFound().build();
+            }
+
+            // Обновляем поля с проверкой на null
+            if (body.containsKey("fullName") && body.get("fullName") != null) {
+                existingEmployee.setFullName(body.get("fullName").toString());
+            }
+
+            if (body.containsKey("department")) {
+                existingEmployee.setDepartment(body.get("department") != null ? body.get("department").toString() : "");
+            }
+
+            if (body.containsKey("photoUrl")) {
+                existingEmployee.setPhotoUrl(body.get("photoUrl") != null ? body.get("photoUrl").toString() : "");
+            }
+
+            if (body.containsKey("active")) {
+                Object activeValue = body.get("active");
+                if (activeValue != null) {
+                    if (activeValue instanceof Boolean) {
+                        existingEmployee.setActive((Boolean) activeValue);
+                    } else if (activeValue instanceof String) {
+                        existingEmployee.setActive(Boolean.parseBoolean((String) activeValue));
+                    }
+                } else {
+                    existingEmployee.setActive(false);
+                }
+            }
+
+            Employee saved = employeeService.saveEmployee(existingEmployee);
+            log.info("Employee updated: {}", saved.getId());
+            return ResponseEntity.ok(saved);
+
+        } catch (Exception e) {
+            log.error("Error updating employee", e);
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEmployee(@PathVariable UUID id) {
+        employeeService.deleteEmployee(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}/active")
+    public ResponseEntity<?> toggleActive(@PathVariable UUID id, @RequestBody Map<String, Boolean> body) {
+        log.info("Toggling active status for employee: {}", id);
+        log.info("Request body: {}", body);
+
+        try {
+            Employee employee = employeeService.getEmployeeById(id);
+            if (employee == null) {
+                log.error("Employee not found: {}", id);
+                return ResponseEntity.notFound().build();
+            }
+
+            Boolean isActive = body.get("isActive");
+            if (isActive == null) {
+                isActive = body.get("active");
+            }
+
+            if (isActive == null) {
+                log.error("No active status provided");
+                return ResponseEntity.badRequest().body("active status is required");
+            }
+
+            employee.setActive(isActive);
+            Employee saved = employeeService.saveEmployee(employee);
+            log.info("Employee {} active status changed to: {}", saved.getId(), saved.isActive());
+
+            return ResponseEntity.ok(saved);
+
+        } catch (Exception e) {
+            log.error("Error toggling active status", e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/upload-csv")
+    public ResponseEntity<?> uploadCSV(@RequestParam("file") MultipartFile file) {
+        log.info("Received CSV upload request");
+
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body("Файл пуст");
+        }
+
+        try {
+            List<Employee> employees = new ArrayList<>();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+
+                String line;
+                boolean isFirstLine = true;
+
+                while ((line = reader.readLine()) != null) {
+                    if (isFirstLine) {
+                        isFirstLine = false;
+                        continue;
+                    }
+
+                    String[] columns = line.split(",");
+                    if (columns.length < 3) continue;
+
+                    Employee employee = new Employee();
+                    employee.setFullName(columns[0].trim());
+                    employee.setDepartment(columns[1].trim());
+                    employee.setPhotoUrl(columns[2].trim());
+                    employee.setActive(true);
+
+                    employees.add(employee);
+                }
+            }
+
+            if (employees.isEmpty()) {
+                return ResponseEntity.badRequest().body("Нет данных для импорта");
+            }
+
+            List<Employee> saved = employeeService.saveAll(employees);
+            log.info("Uploaded {} employees via CSV", saved.size());
+            return ResponseEntity.ok(saved);
+
+        } catch (Exception e) {
+            log.error("Failed to upload CSV", e);
+            return ResponseEntity.badRequest().body("Ошибка загрузки CSV: " + e.getMessage());
+        }
     }
 }

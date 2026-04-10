@@ -3,6 +3,7 @@ export interface Question {
   questionId: string;
   photoUrl: string | null;
   options: string[];
+  mode?: 'name' | 'department';
 }
 
 export interface AnswerRequest {
@@ -83,7 +84,7 @@ export interface Employee {
   fullName: string;
   department: string;
   photoUrl: string;
-  isActive: boolean;
+  active: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -92,5 +93,5 @@ export interface EmployeeForm {
   fullName: string;
   department: string;
   photoUrl: string;
-  isActive: boolean;
+  active: boolean;
 }

@@ -9,10 +9,16 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOriginPatterns("http://localhost:*")  // используем allowedOriginPatterns вместо allowedOrigins
+        registry.addMapping("/**")
+                .allowedOrigins(
+                        "http://localhost:5173",
+                        "http://localhost:8080",
+                        "https://guess-the-colleague-bot.vercel.app",
+                        "https://1443036d45e82aaf-178-68-29-212.serveousercontent.com"  // НОВЫЙ URL!
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true);
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }

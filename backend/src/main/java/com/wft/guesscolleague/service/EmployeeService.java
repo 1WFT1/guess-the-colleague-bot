@@ -30,9 +30,8 @@ public class EmployeeService {
      */
     @Cacheable(value = "employees", key = "'active'")
     public List<Employee> getAllActiveEmployees() {
-        log.info("Loading ALL employees from database (temporary for admin)");
-        // Временно возвращаем всех, чтобы админ видел всех
-        return employeeRepository.findAll();
+        log.info("Loading ACTIVE employees for game");
+        return employeeRepository.findByIsActiveTrue();
     }
 
     /**
@@ -46,11 +45,8 @@ public class EmployeeService {
             log.error("No active employees found!");
             throw new IllegalStateException("No active employees found");
         }
-
         int randomIndex = (int) (Math.random() * activeEmployees.size());
-        Employee employee = activeEmployees.get(randomIndex);
-        log.info("Selected random employee: {} (ID: {})", employee.getFullName(), employee.getId());
-        return employee;
+        return activeEmployees.get(randomIndex);
     }
 
     /**
@@ -62,27 +58,18 @@ public class EmployeeService {
      * @return список случайных сотрудников
      */
     public List<Employee> getRandomActiveEmployees(UUID excludeId, int count) {
-        List<Employee> activeEmployees = getAllActiveEmployees();
-        log.info("Getting {} random employees excluding ID: {}", count, excludeId);
-
-        // Исключаем правильный ответ
-        List<Employee> candidates = activeEmployees.stream()
+        List<Employee> activeEmployees = getAllActiveEmployees()
+                .stream()
                 .filter(e -> !e.getId().equals(excludeId))
                 .collect(Collectors.toList());
 
-        log.info("Candidates count: {}", candidates.size());
-
-        // Если недостаточно сотрудников, возвращаем сколько есть
-        if (candidates.size() < count) {
-            log.warn("Not enough active employees: {} available, need {}", candidates.size(), count);
-            return candidates;
+        if (activeEmployees.size() < count) {
+            log.warn("Not enough active employees: {} available, need {}", activeEmployees.size(), count);
+            return activeEmployees;
         }
 
-        // Перемешиваем и берем первых count
-        Collections.shuffle(candidates);
-        List<Employee> selected = candidates.subList(0, count);
-        log.info("Selected {} employees", selected.size());
-        return selected;
+        Collections.shuffle(activeEmployees);
+        return activeEmployees.subList(0, count);
     }
 
     /**
@@ -99,7 +86,7 @@ public class EmployeeService {
      * @return сохраненный сотрудник
      */
     @Transactional
-    @CacheEvict(value = "employees", allEntries = true)  // Очищает весь кэш employees
+    @CacheEvict(value = "employees", allEntries = true)  // Очищает кэш при сохранении
     public Employee saveEmployee(Employee employee) {
         log.info("Saving employee: {}", employee.getFullName());
         return employeeRepository.save(employee);
@@ -126,4 +113,20 @@ public class EmployeeService {
         log.info("Active employees count: {}", count);
         return count;
     }
+
+    @Transactional
+    @CacheEvict(value = "employees", allEntries = true)  // Очищает кэш при массовом сохранении
+    public List<Employee> saveAll(List<Employee> employees) {
+        log.info("Saving {} employees", employees.size());
+        return employeeRepository.saveAll(employees);
+    }
+
+    /**
+     * Для админ-панели - показывает ВСЕХ сотрудников
+     */
+    public List<Employee> getAllEmployees() {
+        log.info("Loading ALL employees for admin panel");
+        return employeeRepository.findAll();
+    }
+
 }

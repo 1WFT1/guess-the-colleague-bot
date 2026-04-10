@@ -21,23 +21,18 @@ public class TelegramUserService {
     @Value("${admin.user.ids:}")
     private String adminUserIds;
 
-    /**
-     * Регистрация или обновление пользователя (без дополнительных данных)
-     */
+    // Регистрация пользователя без дополнительных данных
     @Transactional
-    public TelegramUser registerOrUpdateUser(Long telegramId) {
-        return registerOrUpdateUser(telegramId, null, null, null);
+    public void registerOrUpdateUser(Long telegramId) {
+        registerOrUpdateUser(telegramId, null, null, null);
     }
 
-    /**
-     * Регистрация или обновление пользователя с данными
-     */
+    // Регистрация пользователя с данными (возвращает void, а не TelegramUser)
     @Transactional
-    public TelegramUser registerOrUpdateUser(Long telegramId, String username,
-                                             String firstName, String lastName) {
+    public void registerOrUpdateUser(Long telegramId, String username,
+                                     String firstName, String lastName) {
         Optional<TelegramUser> existing = userRepository.findByTelegramId(telegramId);
 
-        // Формируем полное имя
         String fullName = "";
         if (firstName != null && !firstName.isEmpty()) {
             fullName = firstName;
@@ -45,20 +40,30 @@ public class TelegramUserService {
         if (lastName != null && !lastName.isEmpty()) {
             fullName += (fullName.isEmpty() ? "" : " ") + lastName;
         }
-        if (fullName.isEmpty()) {
-            fullName = username != null ? username : "User " + telegramId;
-        }
 
         if (existing.isPresent()) {
             TelegramUser user = existing.get();
-            if (username != null) user.setUsername(username);
-            if (firstName != null) user.setFirstName(firstName);
-            if (lastName != null) user.setLastName(lastName);
-            user.setFullName(fullName);
+            // НЕ ОБНОВЛЯЕМ имя, если оно уже есть и не пустое!
+            // Обновляем только если пришли новые данные И старые - дефолтные
+            if (username != null && !username.isEmpty() &&
+                    (user.getUsername() == null || user.getUsername().startsWith("User "))) {
+                user.setUsername(username);
+            }
+            if (!fullName.isEmpty() &&
+                    (user.getFullName() == null || user.getFullName().startsWith("User "))) {
+                user.setFullName(fullName);
+                user.setFirstName(firstName);
+                user.setLastName(lastName);
+            }
             user.setLastActive(LocalDateTime.now());
+            userRepository.save(user);
             log.info("Updated existing user: {} ({})", user.getFullName(), telegramId);
-            return userRepository.save(user);
         } else {
+            // Только для новых пользователей
+            if (fullName.isEmpty()) {
+                fullName = username != null ? username : "User " + telegramId;
+            }
+
             TelegramUser newUser = new TelegramUser();
             newUser.setTelegramId(telegramId);
             newUser.setUsername(username);
@@ -68,15 +73,20 @@ public class TelegramUserService {
             newUser.setLastActive(LocalDateTime.now());
             newUser.setTotalScore(0);
             newUser.setGamesPlayed(0);
+            newUser.setCorrectAnswers(0);
+            newUser.setWrongAnswers(0);
+            newUser.setCurrentStreak(0);
+            newUser.setBestStreak(0);
             newUser.setActive(true);
             newUser.setAdmin(isAdminUser(telegramId));
 
+            userRepository.save(newUser);
             log.info("Registered new user: {} ({})", newUser.getFullName(), telegramId);
-            return userRepository.save(newUser);
         }
     }
 
-    private boolean isAdminUser(Long telegramId) {
+    // Метод проверки админа (сделайте public или protected)
+    protected boolean isAdminUser(Long telegramId) {
         if (adminUserIds == null || adminUserIds.isEmpty()) {
             return false;
         }
@@ -93,18 +103,42 @@ public class TelegramUserService {
         return false;
     }
 
-    public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {
-        return userRepository.findByTelegramId(telegramId);
-    }
-
+    // Метод обновления счета (updateScore)
     @Transactional
-    public void addScore(Long telegramId, int points) {
-        userRepository.addScore(telegramId, points);
+    public void updateScore(Long telegramId, int score) {
+        userRepository.updateScore(telegramId, score);
+        log.debug("Updated score for user {} to {}", telegramId, score);
     }
 
+    // Метод обновления полной статистики
+    @Transactional
+    public void updateStats(Long telegramId, int totalScore, int correctAnswers,
+                            int wrongAnswers, int currentStreak, int bestStreak) {
+        userRepository.updateStats(telegramId, totalScore, correctAnswers,
+                wrongAnswers, currentStreak, bestStreak);
+        log.debug("Updated stats for user {}: score={}, correct={}, wrong={}",
+                telegramId, totalScore, correctAnswers, wrongAnswers);
+    }
+
+    // Метод увеличения счетчика игр
     @Transactional
     public void incrementGamesPlayed(Long telegramId) {
         userRepository.incrementGamesPlayed(telegramId);
+        log.info("Incremented games played for user: {}", telegramId);
+    }
+
+    // Метод сброса статистики
+    @Transactional
+    public void resetUserStats(Long telegramId) {
+        userRepository.updateStats(telegramId, 0, 0, 0, 0, 0);
+        log.info("Reset stats for user: {}", telegramId);
+    }
+
+
+
+    // Получение пользователя
+    public Optional<TelegramUser> getUserByTelegramId(Long telegramId) {
+        return userRepository.findByTelegramId(telegramId);
     }
 
     public List<TelegramUser> getLeaderboard() {
@@ -123,5 +157,11 @@ public class TelegramUserService {
     public TelegramUser getUserStats(Long telegramId) {
         return userRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    @Transactional
+    public void resetGamesPlayed(Long telegramId) {
+        userRepository.resetGamesPlayed(telegramId);
+        log.info("Reset games played for user: {}", telegramId);
     }
 }

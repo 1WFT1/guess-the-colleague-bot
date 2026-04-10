@@ -49,4 +49,9 @@ public interface GameSessionRepository extends JpaRepository<GameSession, UUID> 
     @Transactional
     @Query("UPDATE GameSession gs SET gs.isActive = false WHERE gs.startedAt < :date")
     void archiveOldSessions(@Param("date") LocalDateTime date);
+
+    @Modifying
+    @Query("DELETE FROM GameSession s WHERE s.lastActivity < :date AND s.isActive = false")
+    int deleteOldInactiveSessions(@Param("date") LocalDateTime date);
+
 }

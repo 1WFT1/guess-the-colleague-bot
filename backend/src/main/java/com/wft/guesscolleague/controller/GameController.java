@@ -3,6 +3,8 @@ package com.wft.guesscolleague.controller;
 import com.wft.guesscolleague.dto.AnswerRequest;
 import com.wft.guesscolleague.dto.AnswerResponse;
 import com.wft.guesscolleague.dto.QuestionDTO;
+import com.wft.guesscolleague.dto.UserStatsDTO;
+import com.wft.guesscolleague.model.TelegramUser;
 import com.wft.guesscolleague.service.GameService;
 import com.wft.guesscolleague.service.TelegramUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,14 +42,14 @@ public class GameController {
             @RequestParam(required = false) Long chatId,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String firstName,
-            @RequestParam(required = false) String lastName) {
+            @RequestParam(required = false) String lastName,
+            @RequestParam(required = false, defaultValue = "name") String gameMode) {
 
-        log.info("Creating session for user: {} (username: {})", userId, username);
+        log.info("Creating session for user: {} with gameMode: {}", userId, gameMode);
 
-        // Регистрируем пользователя с полученными данными
         telegramUserService.registerOrUpdateUser(userId, username, firstName, lastName);
 
-        UUID sessionId = gameService.createSession(userId, chatId).getId();
+        UUID sessionId = gameService.createSession(userId, chatId, gameMode).getId();
         return ResponseEntity.ok(sessionId);
     }
 
@@ -93,5 +95,49 @@ public class GameController {
             @RequestBody AnswerRequest request) {
         AnswerResponse response = gameService.processAnswer(request);
         return ResponseEntity.ok(response);
+    }
+
+    //@PostMapping("/reset-stats")
+    //public ResponseEntity<?> resetStats(@RequestParam Long userId) {
+    //    log.info("Resetting stats for user: {}", userId);
+    //    telegramUserService.resetUserStats(userId);
+    //    return ResponseEntity.ok().build();
+    //}
+
+    // Добавьте этот метод в GameController.java
+    @GetMapping("/user-stats")
+    public ResponseEntity<UserStatsDTO> getUserStats(@RequestParam Long userId) {
+        log.info("Getting stats for user: {}", userId);
+        TelegramUser user = telegramUserService.getUserStats(userId);
+        return ResponseEntity.ok(new UserStatsDTO(user));
+    }
+
+    // Также добавьте метод для обновления статистики после игры
+    @PostMapping("/update-stats")
+    public ResponseEntity<UserStatsDTO> updateStats(
+            @RequestParam Long userId,
+            @RequestParam int totalScore,
+            @RequestParam int correctAnswers,
+            @RequestParam int wrongAnswers,
+            @RequestParam int currentStreak,
+            @RequestParam int bestStreak) {
+
+        log.info("Updating stats for user: {} (score: {})", userId, totalScore);
+
+        // Обновляем статистику (метод возвращает void)
+        telegramUserService.updateStats(userId, totalScore, correctAnswers,
+                wrongAnswers, currentStreak, bestStreak);
+
+        // Получаем обновленного пользователя отдельным запросом
+        TelegramUser user = telegramUserService.getUserStats(userId);
+
+        return ResponseEntity.ok(new UserStatsDTO(user));
+    }
+
+    @PatchMapping("/session/{sessionId}/mode")
+    public ResponseEntity<?> updateGameMode(@PathVariable UUID sessionId, @RequestParam String gameMode) {
+        log.info("Updating game mode for session: {} to {}", sessionId, gameMode);
+        gameService.updateGameMode(sessionId, gameMode);
+        return ResponseEntity.ok().build();
     }
 }

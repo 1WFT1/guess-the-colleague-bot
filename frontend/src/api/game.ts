@@ -1,7 +1,8 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type { Question, AnswerResponse, LeaderboardData } from '../types/game';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080/api';
 
 class GameApi {
   private api: AxiosInstance;
@@ -18,6 +19,11 @@ class GameApi {
     this.setupInterceptors();
   }
   
+  async updateGameMode(sessionId: string, gameMode: string): Promise<void> {
+    const response = await this.api.patch(`/game/session/${sessionId}/mode?gameMode=${gameMode}`);
+    return response.data;
+  }
+
   private setupInterceptors() {
     this.api.interceptors.request.use(
       (config) => {
@@ -50,13 +56,18 @@ class GameApi {
       }
     );
   }
-  
-  async createSession(userId: number, chatId?: number): Promise<string> {
-    const response = await this.api.post<string>(
-      `/game/session?userId=${userId}&chatId=${chatId || userId}`
-    );
+
+  async resetGamesPlayed(userId: number): Promise<void> {
+    const response = await this.api.post(`/user/reset-games-played?userId=${userId}`);
     return response.data;
   }
+  
+ async createSession(userId: number, chatId?: number, gameMode?: 'name' | 'department'): Promise<string> {
+  const response = await this.api.post<string>(
+    `/game/session?userId=${userId}&chatId=${chatId || userId}&gameMode=${gameMode || 'name'}`
+  );
+  return response.data;
+}
   
   async getNextQuestion(sessionId: string): Promise<Question> {
     const response = await this.api.get<Question>(`/game/next-question?sessionId=${sessionId}`);
@@ -83,12 +94,20 @@ class GameApi {
     const response = await this.api.get(`/game/status?sessionId=${sessionId}`);
     return response.data;
   }
+
+  
   
   // Employee management
   async getEmployees(): Promise<any[]> {
-    const response = await this.api.get('/employees');
+    const response = await this.api.get('/employees');  // Все сотрудники
     return response.data;
   }
+
+  async getActiveEmployees(): Promise<any[]> {
+  const response = await this.api.get('/employees/active');
+  return response.data;
+}
+
   
   async createEmployee(data: any): Promise<any> {
     const response = await this.api.post('/employees', data);
@@ -104,10 +123,42 @@ class GameApi {
     await this.api.delete(`/employees/${id}`);
   }
   
-  async toggleEmployeeActive(id: number, isActive: boolean): Promise<any> {
-    const response = await this.api.patch(`/employees/${id}/active`, { isActive });
+  async toggleEmployeeActive(id: number, active: boolean): Promise<any> {
+    const response = await this.api.patch(`/employees/${id}/active`, { active });
     return response.data;
   }
+
+  async resetStats(userId: number): Promise<void> {
+    const response = await this.api.post(`/game/reset-stats?userId=${userId}`);
+    return response.data;
+  }
+
+  async getUserStats(userId: number): Promise<any> {
+    const response = await this.api.get(`/user/stats?userId=${userId}`);
+    return response.data;
+  }
+
+  async updateUserStats(userId: number, stats: {
+    totalScore: number;
+    correctAnswers: number;
+    wrongAnswers: number;
+    currentStreak: number;
+    bestStreak: number;
+  }): Promise<any> {
+    const response = await this.api.post('/user/update-stats', null, {
+      params: {
+        userId,
+        ...stats
+      }
+    });
+    return response.data;
+  }
+
+  async getAllUsers(): Promise<any[]> {
+    const response = await this.api.get('/user/all');
+    return response.data;
+  }
+
 }
 
 export const gameApi = new GameApi();

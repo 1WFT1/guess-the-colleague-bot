@@ -45,6 +45,19 @@ public class TelegramUser {
     @Column(name = "games_played")
     private int gamesPlayed = 0;
 
+    // НОВЫЕ ПОЛЯ
+    @Column(name = "correct_answers")
+    private int correctAnswers = 0;
+
+    @Column(name = "wrong_answers")
+    private int wrongAnswers = 0;
+
+    @Column(name = "current_streak")
+    private int currentStreak = 0;
+
+    @Column(name = "best_streak")
+    private int bestStreak = 0;
+
     @Column(name = "last_active")
     private LocalDateTime lastActive;
 

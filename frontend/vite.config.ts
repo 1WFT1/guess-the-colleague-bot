@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import path from 'path' // Добавьте импорт path
 
 export default defineConfig({
   plugins: [vue()],
@@ -13,8 +14,21 @@ export default defineConfig({
       }
     }
   },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@public': path.resolve(__dirname, './public'),
+    }
+  },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    // Добавьте, чтобы Vite правильно обрабатывал статические ассеты
+    assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        assetFileNames: 'assets/[name]-[hash][extname]'
+      }
+    }
   }
 })

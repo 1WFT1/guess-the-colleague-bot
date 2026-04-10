@@ -114,4 +114,16 @@ public class GameSession {
     public void incrementWrong() {
         this.wrongAnswers++;
     }
+
+    @Column(name = "current_streak")
+    private int currentStreak = 0;
+
+    @Column(name = "best_streak")
+    private int bestStreak = 0;
+
+    @Column(name = "current_question_type")
+    private String currentQuestionType;
+
+    @Column(name = "game_mode")
+    private String gameMode = "name";
 }
